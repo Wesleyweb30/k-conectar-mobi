@@ -1,17 +1,17 @@
-import Image from "next/image";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { auth } from "@/lib/auth";
 
-export default function Home() {
-  return (
-    <div>
-      <main>
-        <Image
-          src="/kallas-logo.png"
-          alt="Next.js logo"
-          width={200}
-          height={40}
-          priority
-        />
-      </main>
-    </div>
-  );
+export default async function Home() {
+  const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session) {
+    redirect("/login");
+  }
+
+  if (session.user.role === "admin") {
+    redirect("/admin");
+  }
+
+  redirect("/dashboard");
 }
