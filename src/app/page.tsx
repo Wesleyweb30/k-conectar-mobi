@@ -5,14 +5,12 @@ export default function Home() {
     <div>
       <main>
         <Image
-          className="dark:invert"
-          src="/logo-remove-bg.png"
+          src="/kallas-logo.png"
           alt="Next.js logo"
-          width={100}
-          height={20}
+          width={200}
+          height={40}
           priority
         />
-        <h1>Home</h1>
       </main>
     </div>
   );
