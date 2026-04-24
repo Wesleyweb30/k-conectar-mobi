@@ -24,7 +24,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
           <Link href="/admin" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
             Analytics
           </Link>
-          <Link href="/admin/dados-usuarios" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
+          <Link href="/admin/usuarios" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
             Usuários
           </Link>
           <Link href="/paradas" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
