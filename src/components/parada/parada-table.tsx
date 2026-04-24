@@ -195,9 +195,9 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
   function toggleRouteSelection(parada: ParadaRow) {
     if (parada.latitude === null || parada.longitude === null) return;
 
-    setRouteSelection((prev) => {
-      if (prev.some((item) => item.id === parada.id)) {
-        return prev.filter((item) => item.id !== parada.id);
+    setRouteSelection((prev: any) => {
+      if (prev.some((item: any) => item.id === parada.id)) {
+        return prev.filter((item: any) => item.id !== parada.id);
       }
 
       return [
