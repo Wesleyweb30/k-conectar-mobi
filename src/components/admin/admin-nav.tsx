@@ -22,7 +22,10 @@ export default function AdminNav({ userName }: AdminNavProps) {
         <Image src="/kallas-logo-color.png" alt="K-Conectar Mobi" width={160} height={52} className="object-contain" priority />
         <div className="flex items-center gap-4">
           <Link href="/admin" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
-            Administração
+            Analytics
+          </Link>
+          <Link href="/admin/dados-usuarios" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
+            Usuários
           </Link>
           <Link href="/paradas" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
             Paradas
