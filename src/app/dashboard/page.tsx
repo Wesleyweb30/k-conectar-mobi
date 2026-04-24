@@ -23,7 +23,7 @@ export default async function DashboardPage() {
         <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
           <h2 className="text-lg font-semibold text-gray-800">Ações</h2>
           <p className="text-sm text-gray-600 mt-2">
-            Novas funcionalidades para usuários comuns podem ser adicionadas aqui.
+            Acesse a página de paradas para consultar os dados com filtros dinâmicos.
           </p>
         </div>
       </div>

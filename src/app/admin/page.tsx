@@ -3,7 +3,6 @@ import { auth } from "@/lib/auth";
 import UserTable from "@/components/admin/user-table";
 import CreateUserForm from "@/components/admin/create-user-form";
 
-
 export default async function AdminPage() {
   const session = await auth.api.getSession({ headers: await headers() });
 
