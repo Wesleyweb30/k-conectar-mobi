@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import ParadaRouteMap from "@/components/parada/parada-route-map";
 
 type ParadaRow = {
@@ -108,6 +109,36 @@ function getStatusTone(status: string | null) {
 function csvEscape(value: string | number | null | undefined) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
+
+type ExportRow = {
+  codigo: string;
+  logradouro: string;
+  bairro: string;
+  quantidade: string;
+  "tipologia atual": string;
+  "nova tipologia": string;
+  Latitude: string;
+  Longitude: string;
+};
+
+type ExportAllRow = {
+  id: string;
+  codigo: string;
+  status: string;
+  gestao: string;
+  classe: string;
+  municipio: string;
+  bairro: string;
+  logradouro: string;
+  referencia: string;
+  sentido: string;
+  "tipologia atual": string;
+  quantidade: string;
+  "nova tipologia": string;
+  latitude: string;
+  longitude: string;
+  area: string;
+};
 
 export default function ParadaTable({ paradas, routeMode = false }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -253,18 +284,7 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
   function downloadRouteCsv() {
     if (routePoints.length === 0 || typeof window === "undefined") return;
 
-    const header = [
-      "codigo",
-      "logradouro",
-      "bairro",
-      "quantidade",
-      "tipologia atual",
-      "nova tipologia",
-      "Latitude",
-      "Longitude",
-    ];
-
-    const rows = routePoints.map((point) => {
+    const exportRows: ExportRow[] = routePoints.map((point) => {
       const paradaAtual = paradaById.get(point.id);
 
       const bairro = point.bairro ?? paradaAtual?.bairro ?? "";
@@ -279,17 +299,30 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
       const latitudeValue = typeof latitude === "number" ? String(latitude) : "";
       const longitudeValue = typeof longitude === "number" ? String(longitude) : "";
 
-      return [
-        point.codigo,
+      return {
+        codigo: point.codigo,
         logradouro,
         bairro,
-        quantidade === null ? "" : String(quantidade),
-        tipologiaAtual,
-        novaTipologia,
-        latitudeValue,
-        longitudeValue,
-      ];
+        quantidade: quantidade === null ? "" : String(quantidade),
+        "tipologia atual": tipologiaAtual,
+        "nova tipologia": novaTipologia,
+        Latitude: latitudeValue,
+        Longitude: longitudeValue,
+      };
     });
+
+    const header = [
+      "codigo",
+      "logradouro",
+      "bairro",
+      "quantidade",
+      "tipologia atual",
+      "nova tipologia",
+      "Latitude",
+      "Longitude",
+    ];
+
+    const rows = exportRows.map((row) => header.map((key) => row[key as keyof ExportRow]));
 
     const separator = ",";
     const csvBody = [header, ...rows]
@@ -306,6 +339,62 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+  }
+
+  function downloadRouteExcel() {
+    if (routePoints.length === 0) return;
+
+    const exportRows: ExportAllRow[] = routePoints.map((point) => {
+      const paradaAtual = paradaById.get(point.id);
+      const quantidadeAbrigosTotens =
+        point.quantidadeAbrigosTotens ?? paradaAtual?.quantidadeAbrigosTotens ?? null;
+      const latitude = point.latitude ?? paradaAtual?.latitude ?? null;
+      const longitude = point.longitude ?? paradaAtual?.longitude ?? null;
+
+      return {
+        id: point.id,
+        codigo: point.codigo,
+        status: paradaAtual?.status ?? "",
+        gestao: paradaAtual?.gestao ?? "",
+        classe: paradaAtual?.classe ?? "",
+        municipio: point.municipio ?? paradaAtual?.municipio ?? "",
+        bairro: point.bairro ?? paradaAtual?.bairro ?? "",
+        logradouro: point.logradouro ?? paradaAtual?.logradouro ?? "",
+        referencia: paradaAtual?.referencia ?? "",
+        sentido: paradaAtual?.sentido ?? "",
+        "tipologia atual": point.tipologiaAtual ?? paradaAtual?.tipologiaAtual ?? "",
+        quantidade: quantidadeAbrigosTotens === null ? "" : String(quantidadeAbrigosTotens),
+        "nova tipologia": point.novaTipologia ?? paradaAtual?.novaTipologia ?? "",
+        latitude: typeof latitude === "number" ? String(latitude) : "",
+        longitude: typeof longitude === "number" ? String(longitude) : "",
+        area: paradaAtual?.area ?? "",
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+      header: [
+        "id",
+        "codigo",
+        "status",
+        "gestao",
+        "classe",
+        "municipio",
+        "bairro",
+        "logradouro",
+        "referencia",
+        "sentido",
+        "tipologia atual",
+        "quantidade",
+        "nova tipologia",
+        "latitude",
+        "longitude",
+        "area",
+      ],
+    });
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Rota");
+    XLSX.writeFile(workbook, "rota-paradas.xlsx");
   }
 
   return (
@@ -499,6 +588,14 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
                 className="h-9 rounded-lg border border-emerald-300 px-3 text-sm text-emerald-700 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Exportar CSV
+              </button>
+              <button
+                type="button"
+                onClick={downloadRouteExcel}
+                disabled={routePoints.length === 0}
+                className="h-9 rounded-lg border border-violet-300 px-3 text-sm text-violet-700 transition duration-200 hover:-translate-y-0.5 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Exportar Excel
               </button>
             </div>
           </div>
