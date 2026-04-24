@@ -27,6 +27,9 @@ export default function AdminNav({ userName }: AdminNavProps) {
           <Link href="/paradas" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
             Paradas
           </Link>
+          <Link href="/paradas/rotas" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
+            Rotas
+          </Link>
           <span className="text-sm text-gray-500">{userName}</span>
           <button
             onClick={handleSignOut}

@@ -15,6 +15,7 @@ type SearchParams = {
 
 type Props = {
   searchParams?: SearchParams;
+  routeMode?: boolean;
 };
 
 const PAGE_SIZE = 20;
@@ -92,7 +93,7 @@ async function getDistinctValues() {
   };
 }
 
-export default async function ParadaList({ searchParams }: Props) {
+export default async function ParadaList({ searchParams, routeMode = false }: Props) {
   const codigoRaw = normalizeParam(searchParams?.codigo);
   const status = normalizeParam(searchParams?.status);
   const municipio = normalizeParam(searchParams?.municipio);
@@ -162,16 +163,32 @@ export default async function ParadaList({ searchParams }: Props) {
   };
 
   return (
-    <section className="space-y-4">
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
+    <section className="space-y-5">
+      <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.35)] backdrop-blur">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-gray-800">Paradas</h2>
-            <p className="text-sm text-gray-600 mt-1">
-              Use os filtros para encontrar rapidamente as paradas desejadas.
+            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+              {routeMode ? "Roteirizacao" : "Consulta"}
+            </span>
+            <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+              {routeMode ? "Montagem de rota" : "Paradas"}
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+              {routeMode
+                ? "Filtre, selecione e monte sua rota sem perder a seleção ao navegar entre filtros e páginas."
+                : "Use os filtros para encontrar rapidamente as paradas desejadas."}
             </p>
           </div>
-          <div className="text-sm text-gray-500">Total: {total}</div>
+          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-right">
+            <div className="text-xs uppercase tracking-wide text-slate-500">Registros</div>
+            <div className="text-xl font-semibold text-slate-900">{total}</div>
+            <Link
+              href={routeMode ? "/paradas" : "/paradas/rotas"}
+              className="mt-2 inline-flex h-9 items-center rounded-lg border border-blue-200 bg-white px-3 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
+            >
+              {routeMode ? "Voltar para consulta de paradas" : "Abrir página de rotas"}
+            </Link>
+          </div>
         </div>
 
         <ParadaFilters
@@ -187,10 +204,10 @@ export default async function ParadaList({ searchParams }: Props) {
         />
       </div>
 
-      <ParadaTable paradas={paradas} />
+      <ParadaTable paradas={paradas} routeMode={routeMode} />
 
-      <div className="flex items-center justify-between text-sm text-gray-600">
-        <span>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
+        <span className="font-medium text-slate-700">
           Página {safeCurrentPage} de {totalPages}
         </span>
 
@@ -198,10 +215,10 @@ export default async function ParadaList({ searchParams }: Props) {
           <Link
             href={buildHref(activeParams, Math.max(1, safeCurrentPage - 1))}
             aria-disabled={!hasPrev}
-            className={`px-3 py-2 rounded-lg border ${
+            className={`px-3 py-2 rounded-lg border transition ${
               hasPrev
-                ? "border-gray-300 text-gray-700 hover:bg-gray-100"
-                : "border-gray-200 text-gray-400 pointer-events-none"
+                ? "border-slate-300 text-slate-700 hover:bg-slate-50"
+                : "border-slate-200 text-slate-400 pointer-events-none"
             }`}
           >
             Anterior
@@ -209,10 +226,10 @@ export default async function ParadaList({ searchParams }: Props) {
           <Link
             href={buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1))}
             aria-disabled={!hasNext}
-            className={`px-3 py-2 rounded-lg border ${
+            className={`px-3 py-2 rounded-lg border transition ${
               hasNext
-                ? "border-gray-300 text-gray-700 hover:bg-gray-100"
-                : "border-gray-200 text-gray-400 pointer-events-none"
+                ? "border-slate-300 text-slate-700 hover:bg-slate-50"
+                : "border-slate-200 text-slate-400 pointer-events-none"
             }`}
           >
             Próxima
