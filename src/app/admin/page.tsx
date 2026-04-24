@@ -7,7 +7,7 @@ import ShelterStatusDonut from "@/components/dashboard/shelter-status-donut";
 export default async function AdminPage() {
   const session = await auth.api.getSession({ headers: await headers() });
 
-  const [ativoAgg, semInfoAgg, reativadoAgg] = await Promise.all([
+  const [ativoAgg, semInfoAgg, reativadoAgg, totalParadas, tipologiaAtualGroups, novaTipologiaGroups] = await Promise.all([
     prisma.parada.aggregate({
       where: {
         AND: [
@@ -31,12 +31,42 @@ export default async function AdminPage() {
       where: { status: { contains: "reativ", mode: "insensitive" } },
       _sum: { quantidadeAbrigosTotens: true },
     }),
+    prisma.parada.count(),
+    prisma.parada.groupBy({
+      by: ["tipologiaAtual"],
+      _count: { _all: true },
+      _sum: { quantidadeAbrigosTotens: true },
+    }),
+    prisma.parada.groupBy({
+      by: ["novaTipologia"],
+      _count: { _all: true },
+      _sum: { quantidadeAbrigosTotens: true },
+    }),
   ]);
 
   const ativoCount = ativoAgg._sum.quantidadeAbrigosTotens ?? 0;
   const semInfoCount = semInfoAgg._sum.quantidadeAbrigosTotens ?? 0;
   const reativadoCount = reativadoAgg._sum.quantidadeAbrigosTotens ?? 0;
   const total = ativoCount + semInfoCount + reativadoCount;
+
+  const tipologiaAtualResumo = tipologiaAtualGroups
+    .map((item) => ({
+      nome: item.tipologiaAtual?.trim() || "Sem tipologia atual",
+      quantidadeParadas: item._count._all,
+      quantidadeAbrigos: item._sum.quantidadeAbrigosTotens ?? 0,
+    }))
+    .sort((a, b) => b.quantidadeParadas - a.quantidadeParadas);
+
+  const novaTipologiaResumo = novaTipologiaGroups
+    .map((item) => ({
+      nome: item.novaTipologia?.trim() || "Sem nova tipologia",
+      quantidadeParadas: item._count._all,
+      quantidadeAbrigos: item._sum.quantidadeAbrigosTotens ?? 0,
+    }))
+    .sort((a, b) => b.quantidadeParadas - a.quantidadeParadas);
+
+  const maxTipologiaAtualParadas = Math.max(...tipologiaAtualResumo.map((item) => item.quantidadeParadas), 1);
+  const maxNovaTipologiaParadas = Math.max(...novaTipologiaResumo.map((item) => item.quantidadeParadas), 1);
 
   return (
     <div className="space-y-6">
@@ -66,7 +96,7 @@ export default async function AdminPage() {
                 Abrir roteirização
               </Link>
               <Link
-                href="/admin/dados-usuarios"
+                href="/admin/usuarios"
                 className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100"
               >
                 Abrir dados de usuários
@@ -81,10 +111,14 @@ export default async function AdminPage() {
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+            <p className="text-xs uppercase tracking-wide text-slate-500">Total de abrigos</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">{total}</p>
+          </div>
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-indigo-700">Total de paradas</p>
+            <p className="mt-1 text-xl font-semibold text-indigo-900">{totalParadas}</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-emerald-700">Ativo</p>
@@ -109,6 +143,90 @@ export default async function AdminPage() {
           { label: "Reativado", value: reativadoCount, color: "#3b82f6" },
         ]}
       />
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-slate-900">Tipos de parada (tipologia atual)</h2>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              {tipologiaAtualResumo.length} tipos
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Quantidade de paradas e de abrigos por tipologia atual.</p>
+
+          <div className="mt-4 space-y-2">
+            {tipologiaAtualResumo.map((item) => {
+              const percent = (item.quantidadeParadas / maxTipologiaAtualParadas) * 100;
+
+              return (
+                <div
+                  key={item.nome}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="pr-2">
+                      <p className="text-sm font-medium text-slate-800">{item.nome}</p>
+                      <p className="text-xs text-slate-500">{item.quantidadeParadas} paradas</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">{item.quantidadeAbrigos}</p>
+                      <p className="text-[11px] text-slate-500">abrigos</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`Proporção da tipologia ${item.nome}`}>
+                    <div
+                      className="h-full rounded-full bg-sky-500"
+                      style={{ width: `${percent.toFixed(1)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right text-[11px] text-slate-500">{percent.toFixed(1)}% do maior volume</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-base font-semibold text-slate-900">Tipos de parada (nova tipologia)</h2>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              {novaTipologiaResumo.length} tipos
+            </span>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Distribuição da nova tipologia para acompanhar evolução da base.</p>
+
+          <div className="mt-4 space-y-2">
+            {novaTipologiaResumo.map((item) => {
+              const percent = (item.quantidadeParadas / maxNovaTipologiaParadas) * 100;
+
+              return (
+                <div
+                  key={item.nome}
+                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="pr-2">
+                      <p className="text-sm font-medium text-slate-800">{item.nome}</p>
+                      <p className="text-xs text-slate-500">{item.quantidadeParadas} paradas</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-slate-900">{item.quantidadeAbrigos}</p>
+                      <p className="text-[11px] text-slate-500">abrigos</p>
+                    </div>
+                  </div>
+                  <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`Proporção da nova tipologia ${item.nome}`}>
+                    <div
+                      className="h-full rounded-full bg-emerald-500"
+                      style={{ width: `${percent.toFixed(1)}%` }}
+                    />
+                  </div>
+                  <p className="mt-1 text-right text-[11px] text-slate-500">{percent.toFixed(1)}% do maior volume</p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-slate-900">Evolução futura do analytics</h2>
