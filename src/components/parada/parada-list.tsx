@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import ParadaFilters from "@/components/parada/parada-filters";
+import ParadaTable from "@/components/parada/parada-table";
 
 type SearchParams = {
   codigo?: string;
@@ -186,42 +187,7 @@ export default async function ParadaList({ searchParams }: Props) {
         />
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm overflow-x-auto">
-        <table className="w-full min-w-[900px] text-sm">
-          <thead className="bg-gray-50 text-gray-600">
-            <tr>
-              <th className="px-4 py-3 text-left font-semibold">Código</th>
-              <th className="px-4 py-3 text-left font-semibold">Município</th>
-              <th className="px-4 py-3 text-left font-semibold">Bairro</th>
-              <th className="px-4 py-3 text-left font-semibold">Logradouro</th>
-              <th className="px-4 py-3 text-left font-semibold">Quantidade</th>
-              <th className="px-4 py-3 text-left font-semibold">Nova tipologia</th>
-              <th className="px-4 py-3 text-left font-semibold">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paradas.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
-                  Nenhuma parada encontrada para os filtros selecionados.
-                </td>
-              </tr>
-            ) : (
-              paradas.map((parada) => (
-                <tr key={parada.id} className="border-t border-gray-100 text-gray-700">
-                  <td className="px-4 py-3">{parada.codigo}</td>
-                  <td className="px-4 py-3">{parada.municipio ?? "-"}</td>
-                  <td className="px-4 py-3">{parada.bairro ?? "-"}</td>
-                  <td className="px-4 py-3">{parada.logradouro ?? "-"}</td>
-                  <td className="px-4 py-3">{parada.quantidadeAbrigosTotens ?? "-"}</td>
-                  <td className="px-4 py-3">{parada.novaTipologia ?? "-"}</td>
-                  <td className="px-4 py-3">{parada.status ?? "-"}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <ParadaTable paradas={paradas} />
 
       <div className="flex items-center justify-between text-sm text-gray-600">
         <span>
