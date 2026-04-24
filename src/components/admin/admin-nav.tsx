@@ -1,6 +1,7 @@
 "use client";
 
 import { signOut } from "@/lib/auth-client";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 
 interface AdminNavProps {
@@ -17,7 +18,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-        <span className="font-bold text-gray-800 text-lg">K-Conectar Mobi</span>
+        <Image src="/kallas-logo-color.png" alt="K-Conectar Mobi" width={160} height={52} className="object-contain" priority />
         <div className="flex items-center gap-4">
           <span className="text-sm text-gray-500">{userName}</span>
           <button
