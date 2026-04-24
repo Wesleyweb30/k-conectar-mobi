@@ -174,7 +174,6 @@ export default async function ParadaList({ searchParams }: Props) {
         </div>
 
         <ParadaFilters
-          key={`${codigoRaw ?? ""}|${status ?? ""}|${municipio ?? ""}|${bairro ?? ""}|${logradouro ?? ""}|${novaTipologia ?? ""}`}
           initialFilters={{
             codigo: codigoRaw ?? "",
             status: status ?? "",
