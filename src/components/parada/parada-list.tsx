@@ -17,7 +17,6 @@ type Props = {
 };
 
 const PAGE_SIZE = 20;
-const MAX_INT32 = 2_147_483_647;
 
 function normalizeParam(value?: string) {
   if (!value) return undefined;
@@ -37,30 +36,6 @@ function buildHref(params: SearchParams, page: number) {
   sp.set("page", String(page));
 
   return `?${sp.toString()}`;
-}
-
-function buildCodigoPrefixRanges(prefixRaw?: string) {
-  if (!prefixRaw || !/^\d+$/.test(prefixRaw)) return [];
-
-  const prefix = Number(prefixRaw);
-  if (!Number.isFinite(prefix)) return [];
-
-  const ranges: Array<{ gte: number; lte: number }> = [];
-
-  for (let suffixDigits = 0; suffixDigits <= 9; suffixDigits += 1) {
-    const factor = 10 ** suffixDigits;
-    const start = prefix * factor;
-
-    if (start > MAX_INT32) break;
-
-    const end = Math.min((prefix + 1) * factor - 1, MAX_INT32);
-
-    if (start <= end) {
-      ranges.push({ gte: start, lte: end });
-    }
-  }
-
-  return ranges;
 }
 
 async function getDistinctValues() {
@@ -127,15 +102,12 @@ export default async function ParadaList({ searchParams }: Props) {
   const pageRaw = Number(searchParams?.page ?? "1");
   const page = Number.isFinite(pageRaw) && pageRaw > 0 ? Math.floor(pageRaw) : 1;
   const skip = (page - 1) * PAGE_SIZE;
-  const codigoRanges = buildCodigoPrefixRanges(codigoRaw);
 
   const andFilters: Array<Record<string, unknown>> = [];
 
-  if (codigoRanges.length > 0) {
+  if (codigoRaw) {
     andFilters.push({
-      OR: codigoRanges.map((range) => ({
-        codigo: { gte: range.gte, lte: range.lte },
-      })),
+      codigo: { startsWith: codigoRaw },
     });
   }
 

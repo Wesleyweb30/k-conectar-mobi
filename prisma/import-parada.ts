@@ -41,6 +41,16 @@ function toNullableInt(value: unknown): number | null {
   return Number.isNaN(parsed) ? null : parsed;
 }
 
+function toNullableCodigo(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+
+  const normalized = String(value).trim().replace(/\s+/g, "");
+  if (normalized.length === 0) return null;
+
+  const digitsOnly = normalized.replace(/\D/g, "");
+  return digitsOnly.length > 0 ? digitsOnly : null;
+}
+
 function toNullableFloat(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const parsed = Number.parseFloat(String(value));
@@ -57,6 +67,7 @@ async function main() {
 
   const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
     defval: null,
+    raw: false,
   });
 
   console.log(`Linhas encontradas no Excel: ${rows.length}`);
@@ -69,7 +80,7 @@ async function main() {
 
     const operations = chunk.flatMap((rawRow) => {
       const row = rawRow as ParadaRow;
-      const codigo = toNullableInt(rawRow["Codigo"] ?? rawRow["Código"]);
+      const codigo = toNullableCodigo(rawRow["Codigo"] ?? rawRow["Código"]);
 
       if (!codigo) {
         ignored += 1;
