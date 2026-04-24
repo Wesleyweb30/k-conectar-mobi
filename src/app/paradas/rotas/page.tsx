@@ -35,7 +35,7 @@ export default async function RotasPage({ searchParams }: RotasPageProps) {
         <UserNav userName={session.user.name} />
       )}
 
-      <main className={`${isAdmin ? "max-w-6xl" : "max-w-5xl"} mx-auto px-4 py-8`}>
+      <main className="mx-auto max-w-7xl px-4 py-8">
         <ParadaList searchParams={resolvedSearchParams} routeMode />
       </main>
     </div>

@@ -164,9 +164,9 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
   function toggleRouteSelection(parada: ParadaRow) {
     if (parada.latitude === null || parada.longitude === null) return;
 
-    setRouteSelection((prev: any) => {
-      if (prev.some((item: any) => item.id === parada.id)) {
-        return prev.filter((item: any) => item.id !== parada.id);
+    setRouteSelection((prev) => {
+      if (prev.some((item) => item.id === parada.id)) {
+        return prev.filter((item) => item.id !== parada.id);
       }
 
       return [
@@ -385,9 +385,9 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
       </div>
 
       <div className="hidden overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_18px_40px_-30px_rgba(15,23,42,0.45)] md:block">
-        <div className="overflow-x-auto">
+        <div className={routeMode ? "max-h-[320px] overflow-auto" : "overflow-x-auto"}>
           <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-slate-100/80 text-slate-600">
+            <thead className="sticky top-0 z-10 bg-slate-100/95 text-slate-600 backdrop-blur">
               <tr>
                 {routeMode ? <th className="px-4 py-3 text-left font-semibold">Rota</th> : null}
                 <th className="px-4 py-3 text-left font-semibold">Codigo</th>
@@ -513,17 +513,18 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
           </div>
 
           {routePoints.length > 0 ? (
-            <div className="mb-4 max-h-44 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/80 p-3">
-              <ul className="grid grid-cols-1 gap-2 text-sm text-slate-700 md:grid-cols-2">
+            <div className="mb-4 max-h-32 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+              <ul className="grid grid-cols-2 gap-1.5 text-slate-700 md:grid-cols-3 lg:grid-cols-4">
                 {routePoints.map((point, index) => (
-                  <li key={point.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                    <span className="font-medium">
-                      {index + 1}. {point.codigo}
+                  <li key={point.id} className="flex items-center justify-between gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+                    <span className="min-w-0 text-[11px] font-semibold leading-tight text-slate-700">
+                      <span className="mr-1 text-[10px] text-slate-500">{index + 1}.</span>
+                      <span className="truncate">{point.codigo}</span>
                     </span>
                     <button
                       type="button"
                       onClick={() => removeFromRoute(point.id)}
-                      className="text-xs font-semibold text-red-600 transition hover:text-red-700"
+                      className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-red-600 transition hover:text-red-700"
                     >
                       Remover
                     </button>
@@ -533,7 +534,10 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
             </div>
           ) : null}
 
-          <ParadaRouteMap points={routePoints} />
+          <ParadaRouteMap
+            points={routePoints}
+            heightClassName="h-[420px] md:h-[64vh]"
+          />
         </div>
       ) : null}
 

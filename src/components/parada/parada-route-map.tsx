@@ -12,11 +12,12 @@ type RoutePoint = {
 
 type Props = {
   points: RoutePoint[];
+  heightClassName?: string;
 };
 
 const FORTALEZA_CENTER: [number, number] = [-3.7319, -38.5267];
 
-export default function ParadaRouteMap({ points }: Props) {
+export default function ParadaRouteMap({ points, heightClassName = "h-[360px]" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -90,5 +91,10 @@ export default function ParadaRouteMap({ points }: Props) {
     });
   }, [points]);
 
-  return <div ref={containerRef} className="h-[360px] w-full rounded-xl border border-gray-200" />;
+  return (
+    <div
+      ref={containerRef}
+      className={`${heightClassName} w-full rounded-xl border border-gray-200`}
+    />
+  );
 }
