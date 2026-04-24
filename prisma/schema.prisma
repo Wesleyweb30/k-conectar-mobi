@@ -71,3 +71,26 @@ model Verification {
 
   @@map("verification")
 }
+
+model Parada {
+  id                      String   @id @default(cuid())
+  codigo                  Int      @unique
+  status                  String?
+  gestao                  String?
+  classe                  String?
+  municipio               String?
+  bairro                  String?
+  logradouro              String?
+  referencia              String?
+  sentido                 String?
+  tipologiaAtual          String?
+  quantidadeAbrigosTotens Int?
+  novaTipologia           String?
+  latitude                Float?
+  longitude               Float?
+  area                    String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@map("parada")
+}
