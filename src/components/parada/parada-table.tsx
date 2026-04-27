@@ -214,6 +214,39 @@ function downloadTextFile(content: string, fileName: string, mimeType: string) {
   URL.revokeObjectURL(url);
 }
 
+function sanitizeFileName(value: string) {
+  return value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "").trim();
+}
+
+function promptFileName(defaultBaseName: string, extension: ".xlsx" | ".kml") {
+  if (typeof window === "undefined") return null;
+
+  const response = window.prompt("Informe o nome do arquivo:", defaultBaseName);
+  if (response === null) return null;
+
+  const normalized = sanitizeFileName(response.replace(new RegExp(`${extension}$`, "i"), ""));
+  const finalBaseName = normalized || defaultBaseName;
+  return `${finalBaseName}${extension}`;
+}
+
+function openExternalPage(url: string, targetWindow?: Window | null) {
+  if (typeof window === "undefined") return false;
+
+  if (targetWindow) {
+    targetWindow.location.href = url;
+    return true;
+  }
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  return true;
+}
+
 function formatCoordinate(value: number | null | undefined) {
   return typeof value === "number" ? value.toFixed(6) : "";
 }
@@ -512,14 +545,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
     if (routePoints.length === 0 || typeof window === "undefined") return;
 
     const popup = window.open("", "_blank", "noopener,noreferrer");
-    const navigateToMaps = (url: string) => {
-      if (popup) {
-        popup.location.href = url;
-        return;
-      }
-
-      window.location.assign(url);
-    };
+    const navigateToMaps = (url: string) => openExternalPage(url, popup);
 
     const liveLocation = await requestCurrentLocation();
     const originLocation = liveLocation ?? currentLocation;
@@ -571,6 +597,9 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   function downloadRouteExcel() {
     if (routePoints.length === 0) return;
 
+    const fileName = promptFileName("rota-paradas", ".xlsx");
+    if (!fileName) return;
+
     const exportRows: ExportAllRow[] = routePoints.map((point) => {
       const paradaAtual = paradaById.get(point.id);
       const quantidadeAbrigosTotens =
@@ -621,11 +650,16 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rota");
-    XLSX.writeFile(workbook, "rota-paradas.xlsx");
+    XLSX.writeFile(workbook, fileName);
   }
 
   async function downloadRouteKml() {
     if (routePoints.length === 0) return;
+
+    const fileName = promptFileName("rota-paradas", ".kml");
+    if (!fileName) return;
+
+    const myMapsPage = window.open("", "_blank", "noopener,noreferrer");
 
     const routePlacemarks = routePoints
       .map((point, index) => {
@@ -697,9 +731,11 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
 
     downloadTextFile(
       kml,
-      "rota-paradas.kml",
+      fileName,
       "application/vnd.google-earth.kml+xml;charset=utf-8;",
     );
+
+    openExternalPage("https://www.google.com/maps/d/u/0/", myMapsPage);
   }
 
   return (
