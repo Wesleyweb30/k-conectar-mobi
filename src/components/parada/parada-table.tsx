@@ -63,6 +63,11 @@ type RouteSelectionState = {
   expiresAt: number | null;
 };
 
+type GeolocationPositionErrorLike = {
+  code?: number;
+  message?: string;
+};
+
 function sanitizeRouteSelection(input: unknown): RouteSelectionItem[] {
   if (!Array.isArray(input)) return [];
 
@@ -213,6 +218,46 @@ function formatCoordinate(value: number | null | undefined) {
   return typeof value === "number" ? value.toFixed(6) : "";
 }
 
+function resolveGeolocationErrorMessage(error: GeolocationPositionErrorLike | null | undefined) {
+  if (!error) return "Nao foi possivel obter a localizacao atual.";
+
+  if (error.code === 1) {
+    return "Permissao de localizacao negada. Ative a localizacao no navegador do celular.";
+  }
+
+  if (error.code === 2) {
+    return "Localizacao indisponivel no momento. Verifique GPS/rede e tente novamente.";
+  }
+
+  if (error.code === 3) {
+    return "Tempo esgotado ao obter localizacao. Tente novamente em local aberto.";
+  }
+
+  return error.message || "Nao foi possivel obter a localizacao atual.";
+}
+
+function getCurrentPosition(options: PositionOptions) {
+  return new Promise<GeolocationPosition>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+async function getCurrentPositionWithFallback() {
+  try {
+    return await getCurrentPosition({
+      enableHighAccuracy: true,
+      timeout: 12000,
+      maximumAge: 30000,
+    });
+  } catch {
+    return getCurrentPosition({
+      enableHighAccuracy: false,
+      timeout: 15000,
+      maximumAge: 120000,
+    });
+  }
+}
+
 type ExportAllRow = {
   id: string;
   codigo: string;
@@ -279,8 +324,8 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
 
     let cancelled = false;
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
+    void getCurrentPositionWithFallback()
+      .then((position) => {
         if (cancelled) return;
 
         setCurrentLocation({
@@ -290,17 +335,11 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           capturedAt: new Date().toISOString(),
         });
         setLocationError(null);
-      },
-      (error) => {
+      })
+      .catch((error: GeolocationPositionErrorLike) => {
         if (cancelled) return;
-        setLocationError(error.message || "Nao foi possivel obter a localizacao atual.");
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 60000,
-      },
-    );
+        setLocationError(resolveGeolocationErrorMessage(error));
+      });
 
     return () => {
       cancelled = true;
@@ -359,9 +398,15 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
       return Promise.resolve<CurrentLocation | null>(null);
     }
 
+    if (!window.isSecureContext) {
+      const errorMessage = "Localizacao exige HTTPS no mobile. Abra o sistema em conexao segura.";
+      setLocationError(errorMessage);
+      return Promise.resolve<CurrentLocation | null>(null);
+    }
+
     return new Promise<CurrentLocation | null>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
+      void getCurrentPositionWithFallback()
+        .then((position) => {
           const nextLocation = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -372,17 +417,11 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           setCurrentLocation(nextLocation);
           setLocationError(null);
           resolve(nextLocation);
-        },
-        (error) => {
-          setLocationError(error.message || "Nao foi possivel obter a localizacao atual.");
+        })
+        .catch((error: GeolocationPositionErrorLike) => {
+          setLocationError(resolveGeolocationErrorMessage(error));
           resolve(null);
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 30000,
-        },
-      );
+        });
     });
   }
 
@@ -479,6 +518,16 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   async function openInGoogleMaps() {
     if (routePoints.length === 0 || typeof window === "undefined") return;
 
+    const popup = window.open("", "_blank", "noopener,noreferrer");
+    const navigateToMaps = (url: string) => {
+      if (popup) {
+        popup.location.href = url;
+        return;
+      }
+
+      window.location.assign(url);
+    };
+
     const liveLocation = await requestCurrentLocation();
     const originLocation = liveLocation ?? currentLocation;
 
@@ -492,13 +541,13 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           destination: `${point.latitude},${point.longitude}`,
         });
         const url = `https://www.google.com/maps/dir/?${params.toString()}`;
-        window.open(url, "_blank", "noopener,noreferrer");
+        navigateToMaps(url);
         return;
       }
 
       const query = `${point.latitude},${point.longitude}`;
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-      window.open(url, "_blank", "noopener,noreferrer");
+      navigateToMaps(url);
       return;
     }
 
@@ -523,7 +572,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
     }
 
     const url = `https://www.google.com/maps/dir/?${params.toString()}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    navigateToMaps(url);
   }
 
   function downloadRouteExcel() {

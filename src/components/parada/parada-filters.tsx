@@ -42,8 +42,7 @@ function buildQuery(filters: FiltersState) {
   if (filters.logradouro) sp.set("logradouro", filters.logradouro);
   if (filters.novaTipologia) sp.set("novaTipologia", filters.novaTipologia);
 
-  sp.set("page", "1");
-  return sp.toString();
+  return sp;
 }
 
 export default function ParadaFilters({ initialFilters, distinctValues }: Props) {
@@ -97,10 +96,21 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
   }
 
   useEffect(() => {
+    setFilters(initialFilters);
+  }, [initialFilters]);
+
+  useEffect(() => {
     const timeoutId = setTimeout(() => {
-      const currentQuery = searchParams.toString();
-      if (currentQuery !== nextQuery) {
-        router.replace(`${pathname}?${nextQuery}`, { scroll: false });
+      const currentParams = new URLSearchParams(searchParams.toString());
+      currentParams.delete("page");
+
+      const currentFilterQuery = currentParams.toString();
+      const nextFilterQuery = nextQuery.toString();
+
+      if (currentFilterQuery !== nextFilterQuery) {
+        const finalQuery = new URLSearchParams(nextFilterQuery);
+        finalQuery.set("page", "1");
+        router.replace(`${pathname}?${finalQuery.toString()}`, { scroll: false });
       }
     }, 300);
 
