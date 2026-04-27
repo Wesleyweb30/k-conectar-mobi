@@ -331,7 +331,7 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
           role="dialog"
           aria-modal="true"
           aria-label="Filtros de paradas"
-          className={`absolute right-0 top-0 h-full w-full max-w-sm bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-2xl transition-transform duration-300 ${
+          className={`absolute right-0 top-0 z-10 h-full w-full max-w-sm bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-2xl transition-transform duration-300 ${
             isDrawerOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
