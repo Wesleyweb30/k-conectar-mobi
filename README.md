@@ -112,7 +112,8 @@ Detalhes da importação:
 - /dashboard: área do usuário comum.
 - /paradas: consulta de paradas.
 - /paradas/rotas: visualização no mapa.
-- /admin: painel administrativo.
+- /admin: home administrativa (hub operacional).
+- /admin/analytics: analytics de paradas.
 - /admin/produttivo: visão geral Produttivo.
 - /admin/produttivo/manutencao: registros de manutenção.
 - /admin/produttivo/implantacao: registros de implantação.

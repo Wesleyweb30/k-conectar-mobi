@@ -20,7 +20,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
     await signOut({ fetchOptions: { onSuccess: () => router.push("/login") } });
   }
 
-  const isParqueActive = pathname === "/admin" || pathname.startsWith("/paradas");
+  const isParqueActive = pathname.startsWith("/admin/analytics") || pathname.startsWith("/paradas");
   const isProduttivoActive = pathname.startsWith("/admin/produttivo");
 
   function navLink(href: string, label: string) {
@@ -81,10 +81,10 @@ export default function AdminNav({ userName }: AdminNavProps) {
             {parqueOpen && (
               <div className="absolute left-0 top-full z-50 mt-2 w-52 rounded-xl border border-slate-200 bg-white py-1.5 shadow-lg">
                 <Link
-                  href="/admin"
+                  href="/admin/analytics"
                   onClick={() => setParqueOpen(false)}
                   className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
-                    pathname === "/admin"
+                    pathname.startsWith("/admin/analytics")
                       ? "bg-violet-50 text-violet-700"
                       : "text-slate-700 hover:bg-slate-50"
                   }`}
