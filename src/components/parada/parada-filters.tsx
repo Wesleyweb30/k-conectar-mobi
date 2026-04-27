@@ -72,6 +72,14 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
       ].filter(Boolean).length,
     [filters],
   );
+  const filterPills = [
+    normalize(filters.codigo) ? `Codigo: ${normalize(filters.codigo)}` : null,
+    filters.status ? `Status: ${filters.status === "__EMPTY__" ? "Vazio" : filters.status}` : null,
+    filters.municipio ? `Municipio: ${filters.municipio}` : null,
+    filters.bairro ? `Bairro: ${filters.bairro}` : null,
+    filters.logradouro ? `Logradouro: ${filters.logradouro}` : null,
+    filters.novaTipologia ? `Tipologia: ${filters.novaTipologia}` : null,
+  ].filter(Boolean) as string[];
 
   function clearFilters() {
     setFilters({
@@ -113,104 +121,122 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
   }, [isDrawerOpen]);
 
   const codigoField = (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={filters.codigo}
-      onChange={(event) => {
-        const digitsOnly = event.target.value.replace(/\D/g, "");
-        setFilters((prev) => ({ ...prev, codigo: digitsOnly }));
-      }}
-      placeholder="Código"
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    />
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Codigo</span>
+      <input
+        type="text"
+        inputMode="numeric"
+        value={filters.codigo}
+        onChange={(event) => {
+          const digitsOnly = event.target.value.replace(/\D/g, "");
+          setFilters((prev) => ({ ...prev, codigo: digitsOnly }));
+        }}
+        placeholder="Ex.: 150685"
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      />
+    </label>
   );
 
   const statusField = (
-    <select
-      value={filters.status}
-      onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    >
-      <option value="">Status (todos)</option>
-      <option value="__EMPTY__">Status vazio</option>
-      {distinctValues.status.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Status</span>
+      <select
+        value={filters.status}
+        onChange={(event) => setFilters((prev) => ({ ...prev, status: event.target.value }))}
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      >
+        <option value="">Todos</option>
+        <option value="__EMPTY__">Status vazio</option>
+        {distinctValues.status.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 
   const municipioField = (
-    <select
-      value={filters.municipio}
-      onChange={(event) => setFilters((prev) => ({ ...prev, municipio: event.target.value }))}
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    >
-      <option value="">Município (todos)</option>
-      {distinctValues.municipio.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Municipio</span>
+      <select
+        value={filters.municipio}
+        onChange={(event) => setFilters((prev) => ({ ...prev, municipio: event.target.value }))}
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      >
+        <option value="">Todos</option>
+        {distinctValues.municipio.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 
   const bairroField = (
-    <select
-      value={filters.bairro}
-      onChange={(event) => setFilters((prev) => ({ ...prev, bairro: event.target.value }))}
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    >
-      <option value="">Bairro (todos)</option>
-      {distinctValues.bairro.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Bairro</span>
+      <select
+        value={filters.bairro}
+        onChange={(event) => setFilters((prev) => ({ ...prev, bairro: event.target.value }))}
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      >
+        <option value="">Todos</option>
+        {distinctValues.bairro.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 
   const logradouroField = (
-    <select
-      value={filters.logradouro}
-      onChange={(event) => setFilters((prev) => ({ ...prev, logradouro: event.target.value }))}
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    >
-      <option value="">Logradouro (todos)</option>
-      {distinctValues.logradouro.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Logradouro</span>
+      <select
+        value={filters.logradouro}
+        onChange={(event) => setFilters((prev) => ({ ...prev, logradouro: event.target.value }))}
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      >
+        <option value="">Todos</option>
+        {distinctValues.logradouro.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 
   const tipologiaField = (
-    <select
-      value={filters.novaTipologia}
-      onChange={(event) =>
-        setFilters((prev) => ({ ...prev, novaTipologia: event.target.value }))
-      }
-      className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
-    >
-      <option value="">Nova tipologia (todas)</option>
-      {distinctValues.novaTipologia.map((item) => (
-        <option key={item} value={item}>
-          {item}
-        </option>
-      ))}
-    </select>
+    <label className="space-y-1.5">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Nova tipologia</span>
+      <select
+        value={filters.novaTipologia}
+        onChange={(event) =>
+          setFilters((prev) => ({ ...prev, novaTipologia: event.target.value }))
+        }
+        className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+      >
+        <option value="">Todas</option>
+        {distinctValues.novaTipologia.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 
   return (
     <>
-      <div className="mt-4 md:hidden">
+      <div className="mt-5 md:hidden">
         <button
           type="button"
           onClick={() => setIsDrawerOpen(true)}
-          className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+          className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:bg-slate-50"
         >
           Filtros
           {activeFiltersCount > 0 ? (
@@ -221,21 +247,50 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
         </button>
       </div>
 
-      <div className="mt-4 hidden grid-cols-1 gap-3 md:grid md:grid-cols-2 xl:grid-cols-7">
-        {codigoField}
-        {statusField}
-        {municipioField}
-        {bairroField}
-        {logradouroField}
-        {tipologiaField}
+      <div className="mt-5 hidden rounded-[1.6rem] border border-white/70 bg-white/80 p-4 shadow-[0_18px_36px_-26px_rgba(15,23,42,0.4)] md:block">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+              Painel de filtros
+            </div>
+            <p className="mt-1 text-sm text-slate-600">
+              Combine codigo, localizacao e tipologia para reduzir rapidamente a base exibida.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="h-11 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Limpar filtros
+          </button>
+        </div>
 
-        <button
-          type="button"
-          onClick={clearFilters}
-          className="h-10 rounded-lg border border-gray-300 px-4 text-sm font-medium text-gray-700 transition hover:bg-gray-100"
-        >
-          Limpar
-        </button>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+          {codigoField}
+          {statusField}
+          {municipioField}
+          {bairroField}
+          {logradouroField}
+          {tipologiaField}
+        </div>
+
+        <div className="mt-4 flex min-h-8 flex-wrap gap-2">
+          {filterPills.length > 0 ? (
+            filterPills.map((pill) => (
+              <span
+                key={pill}
+                className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs font-medium text-teal-800"
+              >
+                {pill}
+              </span>
+            ))
+          ) : (
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium text-slate-500">
+              Nenhum filtro ativo
+            </span>
+          )}
+        </div>
       </div>
 
       <div
@@ -257,17 +312,25 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
           role="dialog"
           aria-modal="true"
           aria-label="Filtros de paradas"
-          className={`absolute right-0 top-0 h-full w-full max-w-sm bg-white shadow-2xl transition-transform duration-300 ${
+          className={`absolute right-0 top-0 h-full w-full max-w-sm bg-[linear-gradient(180deg,_rgba(255,255,255,0.98),_rgba(248,250,252,0.98))] shadow-2xl transition-transform duration-300 ${
             isDrawerOpen ? "translate-x-0" : "translate-x-full"
           }`}
         >
           <div className="flex h-full flex-col">
-            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-              <h3 className="text-base font-semibold text-slate-900">Filtros</h3>
+            <div className="border-b border-slate-200 px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-slate-900">Filtros</h3>
+                  <p className="mt-1 text-xs text-slate-500">Ajuste a busca antes de navegar pela tabela.</p>
+                </div>
+                <div className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
+                  {activeFiltersCount} ativos
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setIsDrawerOpen(false)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                className="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
               >
                 Fechar
               </button>
@@ -276,7 +339,7 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {codigoField}
 
-              <section className="rounded-xl border border-slate-200 bg-slate-50">
+              <section className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm">
                 <button
                   type="button"
                   onClick={() => toggleDrawerSection("status")}
@@ -290,7 +353,7 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
                 {drawerSections.status ? <div className="p-3 pt-0">{statusField}</div> : null}
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-slate-50">
+              <section className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm">
                 <button
                   type="button"
                   onClick={() => toggleDrawerSection("localizacao")}
@@ -310,7 +373,7 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
                 ) : null}
               </section>
 
-              <section className="rounded-xl border border-slate-200 bg-slate-50">
+              <section className="rounded-2xl border border-slate-200 bg-white/80 shadow-sm">
                 <button
                   type="button"
                   onClick={() => toggleDrawerSection("tipologia")}
@@ -325,7 +388,7 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
               </section>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 p-4">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white/90 p-4">
               <button
                 type="button"
                 onClick={clearFilters}

@@ -152,6 +152,48 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
   const safeCurrentPage = Math.min(page, totalPages);
   const hasPrev = safeCurrentPage > 1;
   const hasNext = safeCurrentPage < totalPages;
+  const paradasOnPage = paradas.length;
+  const paradasWithCoordinatesOnPage = paradas.filter(
+    (parada) => parada.latitude !== null && parada.longitude !== null,
+  ).length;
+  const distinctMunicipiosOnPage = new Set(
+    paradas.map((parada) => parada.municipio).filter((value): value is string => Boolean(value)),
+  ).size;
+  const summaryCards = routeMode
+    ? [
+        {
+          label: "Pontos nesta pagina",
+          value: String(paradasOnPage),
+          tone: "from-teal-500/20 via-teal-500/10 to-transparent border-teal-200/70 text-teal-950",
+        },
+        {
+          label: "Com geolocalizacao",
+          value: String(paradasWithCoordinatesOnPage),
+          tone: "from-sky-500/20 via-sky-500/10 to-transparent border-sky-200/70 text-sky-950",
+        },
+        {
+          label: "Municipios visiveis",
+          value: String(distinctMunicipiosOnPage),
+          tone: "from-amber-500/20 via-amber-500/10 to-transparent border-amber-200/70 text-amber-950",
+        },
+      ]
+    : [
+        {
+          label: "Registros encontrados",
+          value: String(total),
+          tone: "from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-200/70 text-cyan-950",
+        },
+        {
+          label: "Pagina atual",
+          value: `${safeCurrentPage}/${totalPages}`,
+          tone: "from-indigo-500/20 via-indigo-500/10 to-transparent border-indigo-200/70 text-indigo-950",
+        },
+        {
+          label: "Municipios visiveis",
+          value: String(distinctMunicipiosOnPage),
+          tone: "from-orange-500/20 via-orange-500/10 to-transparent border-orange-200/70 text-orange-950",
+        },
+      ];
 
   const activeParams: SearchParams = {
     ...(codigoRaw ? { codigo: codigoRaw } : {}),
@@ -163,32 +205,56 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
   };
 
   return (
-    <section className="space-y-5">
-      <div className="rounded-3xl border border-slate-200/80 bg-white/95 p-5 shadow-[0_12px_30px_-20px_rgba(15,23,42,0.35)] backdrop-blur">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700">
+    <section className="space-y-6">
+      <div className="relative overflow-hidden rounded-[2rem] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,_rgba(45,212,191,0.18),_transparent_38%),linear-gradient(135deg,_rgba(255,255,255,0.97),_rgba(248,250,252,0.94))] p-5 shadow-[0_24px_60px_-34px_rgba(15,23,42,0.45)] backdrop-blur md:p-7">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,transparent_0%,rgba(15,23,42,0.03)_35%,transparent_70%)]" />
+        <div className="relative flex flex-wrap items-start justify-between gap-5">
+          <div className="max-w-3xl">
+            <span className="inline-flex items-center rounded-full border border-teal-200 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-teal-800 shadow-sm">
               {routeMode ? "Roteirizacao" : "Consulta"}
             </span>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">
+            <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">
               {routeMode ? "Montagem de rota" : "Paradas"}
             </h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 md:text-[15px]">
               {routeMode
-                ? "Filtre, selecione e monte sua rota sem perder a seleção ao navegar entre filtros e páginas."
-                : "Use os filtros para encontrar rapidamente as paradas desejadas."}
+                ? "Monte roteiros em campo com foco nas paradas georreferenciadas, mantendo a leitura clara da selecao, do mapa e da exportacao operacional."
+                : "Explore a base de paradas com um painel mais limpo, leitura rapida dos filtros ativos e navegação mais clara entre consulta e planejamento."}
             </p>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-slate-600">
+              <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
+                Atualizacao visual orientada para operacao
+              </span>
+              <span className="rounded-full border border-white/70 bg-white/80 px-3 py-1 shadow-sm">
+                {routeMode ? "Selecao persistida por 10 minutos" : "Filtros com resposta rapida"}
+              </span>
+            </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-right">
-            <div className="text-xs uppercase tracking-wide text-slate-500">Registros</div>
-            <div className="text-xl font-semibold text-slate-900">{total}</div>
+          <div className="w-full max-w-xs rounded-[1.6rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_20px_35px_-25px_rgba(15,23,42,0.5)]">
+            <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Resumo rapido</div>
+            <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{total}</div>
+            <div className="mt-1 text-sm text-slate-600">
+              {routeMode ? "paradas filtradas prontas para compor a rota" : "registros encontrados com os filtros atuais"}
+            </div>
             <Link
               href={routeMode ? "/paradas" : "/paradas/rotas"}
-              className="mt-2 inline-flex h-9 items-center rounded-lg border border-blue-200 bg-white px-3 text-sm font-medium text-blue-700 transition hover:bg-blue-50"
+              className="mt-4 inline-flex h-10 items-center rounded-xl border border-slate-200 bg-slate-950 px-4 text-sm font-medium text-white transition hover:-translate-y-0.5 hover:bg-slate-800"
             >
               {routeMode ? "Voltar para consulta de paradas" : "Abrir página de rotas"}
             </Link>
           </div>
+        </div>
+
+        <div className="relative mt-6 grid gap-3 md:grid-cols-3">
+          {summaryCards.map((card) => (
+            <div
+              key={card.label}
+              className={`rounded-[1.5rem] border bg-gradient-to-br p-4 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.45)] ${card.tone}`}
+            >
+              <div className="text-[11px] uppercase tracking-[0.18em] text-current/70">{card.label}</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight">{card.value}</div>
+            </div>
+          ))}
         </div>
 
         <ParadaFilters
@@ -204,38 +270,55 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
         />
       </div>
 
-      <ParadaTable paradas={paradas} routeMode={routeMode} />
+      <ParadaTable
+        paradas={paradas}
+        routeMode={routeMode}
+        pagination={
+          routeMode
+            ? {
+                currentPage: safeCurrentPage,
+                totalPages,
+                hasPrev,
+                hasNext,
+                prevHref: buildHref(activeParams, Math.max(1, safeCurrentPage - 1)),
+                nextHref: buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1)),
+              }
+            : undefined
+        }
+      />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/90 px-4 py-3 text-sm text-slate-600">
-        <span className="font-medium text-slate-700">
-          Página {safeCurrentPage} de {totalPages}
-        </span>
+      {!routeMode ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] border border-slate-200/80 bg-white/90 px-4 py-4 text-sm text-slate-600 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.45)]">
+          <span className="font-medium text-slate-700">
+            Página {safeCurrentPage} de {totalPages}
+          </span>
 
-        <div className="flex gap-2">
-          <Link
-            href={buildHref(activeParams, Math.max(1, safeCurrentPage - 1))}
-            aria-disabled={!hasPrev}
-            className={`px-3 py-2 rounded-lg border transition ${
-              hasPrev
-                ? "border-slate-300 text-slate-700 hover:bg-slate-50"
-                : "border-slate-200 text-slate-400 pointer-events-none"
-            }`}
-          >
-            Anterior
-          </Link>
-          <Link
-            href={buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1))}
-            aria-disabled={!hasNext}
-            className={`px-3 py-2 rounded-lg border transition ${
-              hasNext
-                ? "border-slate-300 text-slate-700 hover:bg-slate-50"
-                : "border-slate-200 text-slate-400 pointer-events-none"
-            }`}
-          >
-            Próxima
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href={buildHref(activeParams, Math.max(1, safeCurrentPage - 1))}
+              aria-disabled={!hasPrev}
+              className={`rounded-xl px-4 py-2.5 transition ${
+                hasPrev
+                  ? "border border-slate-300 bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50"
+                  : "border border-slate-200 text-slate-400 pointer-events-none"
+              }`}
+            >
+              Anterior
+            </Link>
+            <Link
+              href={buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1))}
+              aria-disabled={!hasNext}
+              className={`rounded-xl px-4 py-2.5 transition ${
+                hasNext
+                  ? "border border-slate-300 bg-white text-slate-700 hover:-translate-y-0.5 hover:bg-slate-50"
+                  : "border border-slate-200 text-slate-400 pointer-events-none"
+              }`}
+            >
+              Próxima
+            </Link>
+          </div>
         </div>
-      </div>
+      ) : null}
     </section>
   );
 }
