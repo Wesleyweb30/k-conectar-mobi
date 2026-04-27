@@ -10,14 +10,24 @@ type RoutePoint = {
   longitude: number;
 };
 
+type CurrentLocation = {
+  latitude: number;
+  longitude: number;
+};
+
 type Props = {
   points: RoutePoint[];
+  currentLocation?: CurrentLocation | null;
   heightClassName?: string;
 };
 
 const FORTALEZA_CENTER: [number, number] = [-3.7319, -38.5267];
 
-export default function ParadaRouteMap({ points, heightClassName = "h-[360px]" }: Props) {
+export default function ParadaRouteMap({
+  points,
+  currentLocation,
+  heightClassName = "h-[360px]",
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -61,6 +71,20 @@ export default function ParadaRouteMap({ points, heightClassName = "h-[360px]" }
 
     const latLngs: L.LatLngExpression[] = points.map((point) => [point.latitude, point.longitude]);
 
+    if (currentLocation) {
+      const currentMarker = L.circleMarker([currentLocation.latitude, currentLocation.longitude], {
+        radius: 8,
+        color: "#1d4ed8",
+        weight: 3,
+        fillColor: "#93c5fd",
+        fillOpacity: 0.95,
+      });
+
+      currentMarker.bindPopup("Localizacao atual");
+      currentMarker.addTo(layerGroup);
+      latLngs.unshift([currentLocation.latitude, currentLocation.longitude]);
+    }
+
     points.forEach((point, index) => {
       const marker = L.circleMarker([point.latitude, point.longitude], {
         radius: 7,
@@ -89,7 +113,7 @@ export default function ParadaRouteMap({ points, heightClassName = "h-[360px]" }
       padding: [40, 40],
       maxZoom: 16,
     });
-  }, [points]);
+  }, [currentLocation, points]);
 
   return (
     <div

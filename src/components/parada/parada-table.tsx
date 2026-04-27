@@ -41,6 +41,13 @@ type RouteSelectionItem = {
   longitude: number;
 };
 
+type CurrentLocation = {
+  latitude: number;
+  longitude: number;
+  accuracy: number | null;
+  capturedAt: string;
+};
+
 const ROUTE_STORAGE_KEY = "kconectar.paradas.routeSelection.v1";
 
 function readStoredSelection(): RouteSelectionItem[] {
@@ -106,20 +113,32 @@ function getStatusTone(status: string | null) {
   return "bg-blue-100 text-blue-700";
 }
 
-function csvEscape(value: string | number | null | undefined) {
-  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+function escapeXml(value: string | number | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
-type ExportRow = {
-  codigo: string;
-  logradouro: string;
-  bairro: string;
-  quantidade: string;
-  "tipologia atual": string;
-  "nova tipologia": string;
-  Latitude: string;
-  Longitude: string;
-};
+function downloadTextFile(content: string, fileName: string, mimeType: string) {
+  if (typeof window === "undefined") return;
+
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+function formatCoordinate(value: number | null | undefined) {
+  return typeof value === "number" ? value.toFixed(6) : "";
+}
 
 type ExportAllRow = {
   id: string;
@@ -145,11 +164,46 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
   const [routeSelection, setRouteSelection] = useState<RouteSelectionItem[]>(() =>
     routeMode ? readStoredSelection() : [],
   );
+  const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!routeMode || typeof window === "undefined") return;
     window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(routeSelection));
   }, [routeMode, routeSelection]);
+
+  useEffect(() => {
+    if (!routeMode || typeof window === "undefined" || !("geolocation" in navigator)) return;
+
+    let cancelled = false;
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (cancelled) return;
+
+        setCurrentLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+          capturedAt: new Date().toISOString(),
+        });
+        setLocationError(null);
+      },
+      (error) => {
+        if (cancelled) return;
+        setLocationError(error.message || "Nao foi possivel obter a localizacao atual.");
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 60000,
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [routeMode]);
 
   const selectedRouteIdSet = useMemo(
     () => new Set(routeSelection.map((item) => item.id)),
@@ -192,12 +246,72 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedParada]);
 
+  function requestCurrentLocation() {
+    if (typeof window === "undefined") {
+      return Promise.resolve<CurrentLocation | null>(null);
+    }
+
+    if (!("geolocation" in navigator)) {
+      const errorMessage = "Geolocalizacao nao disponivel neste navegador.";
+      setLocationError(errorMessage);
+      return Promise.resolve<CurrentLocation | null>(null);
+    }
+
+    return new Promise<CurrentLocation | null>((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const nextLocation = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
+            capturedAt: new Date().toISOString(),
+          };
+
+          setCurrentLocation(nextLocation);
+          setLocationError(null);
+          resolve(nextLocation);
+        },
+        (error) => {
+          setLocationError(error.message || "Nao foi possivel obter a localizacao atual.");
+          resolve(null);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 30000,
+        },
+      );
+    });
+  }
+
+  function buildAddress(point: RouteSelectionItem, paradaAtual?: ParadaRow) {
+    return [
+      point.logradouro ?? paradaAtual?.logradouro ?? "",
+      point.bairro ?? paradaAtual?.bairro ?? "",
+      point.municipio ?? paradaAtual?.municipio ?? "",
+    ]
+      .map((value) => value?.trim())
+      .filter(Boolean)
+      .join(", ");
+  }
+
+  function buildKmlDescription(fields: Array<[string, string]>) {
+    const rows = fields
+      .map(
+        ([label, value]) =>
+          `<tr><th align="left">${escapeXml(label)}</th><td>${escapeXml(value || "-")}</td></tr>`,
+      )
+      .join("");
+
+    return `<![CDATA[<table border="1" cellpadding="6" cellspacing="0">${rows}</table>]]>`;
+  }
+
   function toggleRouteSelection(parada: ParadaRow) {
     if (parada.latitude === null || parada.longitude === null) return;
 
-    setRouteSelection((prev: any) => {
-      if (prev.some((item: any) => item.id === parada.id)) {
-        return prev.filter((item: any) => item.id !== parada.id);
+    setRouteSelection((prev) => {
+      if (prev.some((item) => item.id === parada.id)) {
+        return prev.filter((item) => item.id !== parada.id);
       }
 
       return [
@@ -248,21 +362,38 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
     setRouteSelection((prev) => prev.filter((item) => item.id !== id));
   }
 
-  function openInGoogleMaps() {
+  async function openInGoogleMaps() {
     if (routePoints.length === 0 || typeof window === "undefined") return;
+
+    const liveLocation = await requestCurrentLocation();
+    const originLocation = liveLocation ?? currentLocation;
 
     if (routePoints.length === 1) {
       const [point] = routePoints;
+      if (originLocation) {
+        const params = new URLSearchParams({
+          api: "1",
+          travelmode: "driving",
+          origin: `${originLocation.latitude},${originLocation.longitude}`,
+          destination: `${point.latitude},${point.longitude}`,
+        });
+        const url = `https://www.google.com/maps/dir/?${params.toString()}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+        return;
+      }
+
       const query = `${point.latitude},${point.longitude}`;
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
       window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
 
-    const origin = `${routePoints[0].latitude},${routePoints[0].longitude}`;
+    const origin = originLocation
+      ? `${originLocation.latitude},${originLocation.longitude}`
+      : `${routePoints[0].latitude},${routePoints[0].longitude}`;
     const destination = `${routePoints[routePoints.length - 1].latitude},${routePoints[routePoints.length - 1].longitude}`;
     const waypoints = routePoints
-      .slice(1, -1)
+      .slice(0, -1)
       .map((point) => `${point.latitude},${point.longitude}`)
       .join("|");
 
@@ -279,66 +410,6 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
 
     const url = `https://www.google.com/maps/dir/?${params.toString()}`;
     window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  function downloadRouteCsv() {
-    if (routePoints.length === 0 || typeof window === "undefined") return;
-
-    const exportRows: ExportRow[] = routePoints.map((point) => {
-      const paradaAtual = paradaById.get(point.id);
-
-      const bairro = point.bairro ?? paradaAtual?.bairro ?? "";
-      const logradouro = point.logradouro ?? paradaAtual?.logradouro ?? "";
-      const quantidade =
-        point.quantidadeAbrigosTotens ?? paradaAtual?.quantidadeAbrigosTotens ?? null;
-      const tipologiaAtual = point.tipologiaAtual ?? paradaAtual?.tipologiaAtual ?? "";
-      const novaTipologia = point.novaTipologia ?? paradaAtual?.novaTipologia ?? "";
-
-      const latitude = point.latitude ?? paradaAtual?.latitude;
-      const longitude = point.longitude ?? paradaAtual?.longitude;
-      const latitudeValue = typeof latitude === "number" ? String(latitude) : "";
-      const longitudeValue = typeof longitude === "number" ? String(longitude) : "";
-
-      return {
-        codigo: point.codigo,
-        logradouro,
-        bairro,
-        quantidade: quantidade === null ? "" : String(quantidade),
-        "tipologia atual": tipologiaAtual,
-        "nova tipologia": novaTipologia,
-        Latitude: latitudeValue,
-        Longitude: longitudeValue,
-      };
-    });
-
-    const header = [
-      "codigo",
-      "logradouro",
-      "bairro",
-      "quantidade",
-      "tipologia atual",
-      "nova tipologia",
-      "Latitude",
-      "Longitude",
-    ];
-
-    const rows = exportRows.map((row) => header.map((key) => row[key as keyof ExportRow]));
-
-    const separator = ",";
-    const csvBody = [header, ...rows]
-      .map((row) => row.map((value) => csvEscape(value)).join(separator))
-      .join("\r\n");
-
-    const csv = csvBody;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "rota-paradas.csv";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   }
 
   function downloadRouteExcel() {
@@ -395,6 +466,84 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rota");
     XLSX.writeFile(workbook, "rota-paradas.xlsx");
+  }
+
+  async function downloadRouteKml() {
+    if (routePoints.length === 0) return;
+
+    const routePlacemarks = routePoints
+      .map((point, index) => {
+        const paradaAtual = paradaById.get(point.id);
+        const endereco = buildAddress(point, paradaAtual);
+        const quantidade = point.quantidadeAbrigosTotens ?? paradaAtual?.quantidadeAbrigosTotens;
+        const tipologiaAtual = point.tipologiaAtual ?? paradaAtual?.tipologiaAtual ?? "";
+        const novaTipologia = point.novaTipologia ?? paradaAtual?.novaTipologia ?? "";
+        const description = buildKmlDescription([
+          ["Ordem", String(index + 1)],
+          ["PED", point.codigo],
+          ["Endereco", endereco],
+          ["Quantidade", quantidade === null || quantidade === undefined ? "-" : String(quantidade)],
+          ["Tipologia atual", tipologiaAtual],
+          ["Nova tipologia", novaTipologia],
+          ["Latitude", formatCoordinate(point.latitude)],
+          ["Longitude", formatCoordinate(point.longitude)],
+        ]);
+
+        return `
+    <Placemark>
+      <name>${escapeXml(point.codigo)}</name>
+      <styleUrl>#route-stop</styleUrl>
+      <description>${description}</description>
+      <Point>
+        <coordinates>${point.longitude},${point.latitude},0</coordinates>
+      </Point>
+    </Placemark>`;
+      })
+      .join("");
+
+    const lineCoordinates = routePoints
+      .map((point) => `${point.longitude},${point.latitude},0`)
+      .join(" ");
+
+    const routeLinePlacemark = routePoints.length >= 2
+      ? `
+    <Placemark>
+      <name>Trajeto da rota</name>
+      <styleUrl>#route-line</styleUrl>
+      <LineString>
+        <tessellate>1</tessellate>
+        <coordinates>${lineCoordinates}</coordinates>
+      </LineString>
+    </Placemark>`
+      : "";
+
+    const kml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Rota de paradas</name>
+    <Style id="route-stop">
+      <IconStyle>
+        <color>ff0f766e</color>
+        <scale>1.2</scale>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0.9</scale>
+      </LabelStyle>
+    </Style>
+    <Style id="route-line">
+      <LineStyle>
+        <color>ff2563eb</color>
+        <width>4</width>
+      </LineStyle>
+    </Style>${routeLinePlacemark}${routePlacemarks}
+  </Document>
+</kml>`;
+
+    downloadTextFile(
+      kml,
+      "rota-paradas.kml",
+      "application/vnd.google-earth.kml+xml;charset=utf-8;",
+    );
   }
 
   return (
@@ -561,6 +710,15 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
+                onClick={() => {
+                  void requestCurrentLocation();
+                }}
+                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+              >
+                Atualizar localizacao
+              </button>
+              <button
+                type="button"
                 onClick={selectAllWithCoordinates}
                 className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
               >
@@ -583,19 +741,19 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
               </button>
               <button
                 type="button"
-                onClick={downloadRouteCsv}
-                disabled={routePoints.length === 0}
-                className="h-9 rounded-lg border border-emerald-300 px-3 text-sm text-emerald-700 transition duration-200 hover:-translate-y-0.5 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Exportar CSV
-              </button>
-              <button
-                type="button"
                 onClick={downloadRouteExcel}
                 disabled={routePoints.length === 0}
                 className="h-9 rounded-lg border border-violet-300 px-3 text-sm text-violet-700 transition duration-200 hover:-translate-y-0.5 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Exportar Excel
+              </button>
+              <button
+                type="button"
+                onClick={downloadRouteKml}
+                disabled={routePoints.length === 0}
+                className="h-9 rounded-lg border border-amber-300 px-3 text-sm text-amber-700 transition duration-200 hover:-translate-y-0.5 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Exportar KML
               </button>
             </div>
           </div>
@@ -607,6 +765,16 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
             <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">
               {routePoints.length >= 2 ? "Rota desenhada" : "Selecione 2+ para rota"}
             </span>
+            <span className={`rounded-full px-3 py-1 font-medium ${currentLocation ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+              {currentLocation
+                ? `Local atual: ${formatCoordinate(currentLocation.latitude)}, ${formatCoordinate(currentLocation.longitude)}`
+                : "Local atual indisponivel"}
+            </span>
+            {locationError ? (
+              <span className="rounded-full bg-rose-50 px-3 py-1 font-medium text-rose-700">
+                {locationError}
+              </span>
+            ) : null}
           </div>
 
           {routePoints.length > 0 ? (
@@ -633,6 +801,7 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
 
           <ParadaRouteMap
             points={routePoints}
+            currentLocation={currentLocation}
             heightClassName="h-[420px] md:h-[64vh]"
           />
         </div>
