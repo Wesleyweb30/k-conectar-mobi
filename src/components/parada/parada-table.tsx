@@ -288,6 +288,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   );
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
   const routeSelection = routeSelectionState.items;
 
   useEffect(() => {
@@ -322,28 +323,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   useEffect(() => {
     if (!routeMode || typeof window === "undefined" || !("geolocation" in navigator)) return;
 
-    let cancelled = false;
-
-    void getCurrentPositionWithFallback()
-      .then((position) => {
-        if (cancelled) return;
-
-        setCurrentLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: Number.isFinite(position.coords.accuracy) ? position.coords.accuracy : null,
-          capturedAt: new Date().toISOString(),
-        });
-        setLocationError(null);
-      })
-      .catch((error: GeolocationPositionErrorLike) => {
-        if (cancelled) return;
-        setLocationError(resolveGeolocationErrorMessage(error));
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    void requestCurrentLocation({ silent: true });
   }, [routeMode]);
 
   const selectedRouteIdSet = useMemo(
@@ -387,22 +367,30 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedParada]);
 
-  function requestCurrentLocation() {
+  function requestCurrentLocation(options?: { silent?: boolean }) {
+    const silent = options?.silent ?? false;
+
     if (typeof window === "undefined") {
       return Promise.resolve<CurrentLocation | null>(null);
     }
 
     if (!("geolocation" in navigator)) {
       const errorMessage = "Geolocalizacao nao disponivel neste navegador.";
-      setLocationError(errorMessage);
+      if (!silent) {
+        setLocationError(errorMessage);
+      }
       return Promise.resolve<CurrentLocation | null>(null);
     }
 
     if (!window.isSecureContext) {
       const errorMessage = "Localizacao exige HTTPS no mobile. Abra o sistema em conexao segura.";
-      setLocationError(errorMessage);
+      if (!silent) {
+        setLocationError(errorMessage);
+      }
       return Promise.resolve<CurrentLocation | null>(null);
     }
+
+    setIsRequestingLocation(true);
 
     return new Promise<CurrentLocation | null>((resolve) => {
       void getCurrentPositionWithFallback()
@@ -419,8 +407,13 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           resolve(nextLocation);
         })
         .catch((error: GeolocationPositionErrorLike) => {
-          setLocationError(resolveGeolocationErrorMessage(error));
+          if (!silent) {
+            setLocationError(resolveGeolocationErrorMessage(error));
+          }
           resolve(null);
+        })
+        .finally(() => {
+          setIsRequestingLocation(false);
         });
     });
   }
@@ -901,6 +894,23 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
               <p className="mt-1 text-sm text-slate-600">
                 Filtre e selecione paradas. As selecionadas continuam salvas mesmo mudando os filtros.
               </p>
+              {!currentLocation ? (
+                <div className="mt-3 rounded-2xl border border-sky-200 bg-sky-50/80 p-3 md:hidden">
+                  <p className="text-sm font-medium text-sky-900">
+                    Toque para usar a localizacao atual do smartphone como origem da rota.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void requestCurrentLocation();
+                    }}
+                    disabled={isRequestingLocation}
+                    className="mt-3 inline-flex min-h-10 items-center justify-center rounded-xl bg-sky-700 px-4 text-sm font-medium text-white transition hover:bg-sky-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isRequestingLocation ? "Solicitando localizacao..." : "Usar localizacao do smartphone"}
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -909,9 +919,14 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                 onClick={() => {
                   void requestCurrentLocation();
                 }}
-                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                disabled={isRequestingLocation}
+                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Atualizar localizacao
+                {isRequestingLocation
+                  ? "Solicitando localizacao..."
+                  : currentLocation
+                    ? "Atualizar localizacao"
+                    : "Usar localizacao do smartphone"}
               </button>
               <button
                 type="button"
