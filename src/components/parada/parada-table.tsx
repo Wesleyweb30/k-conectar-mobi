@@ -234,11 +234,10 @@ function openExternalPage(url: string, targetWindow?: Window | null) {
 
   if (targetWindow && !targetWindow.closed) {
     try {
-      targetWindow.location.replace(url);
-      targetWindow.focus();
+      targetWindow.location.href = url;
       return true;
     } catch {
-      targetWindow.close();
+      // continua para os proximos fallbacks
     }
   }
 
@@ -247,19 +246,18 @@ function openExternalPage(url: string, targetWindow?: Window | null) {
     return true;
   }
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.target = "_blank";
-  link.rel = "noopener noreferrer";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-
-  if (!document.hidden) {
-    window.location.assign(url);
+  try {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
+  } catch {
+    return false;
   }
-
-  return true;
 }
 
 function formatCoordinate(value: number | null | undefined) {
@@ -556,14 +554,14 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
     });
   }
 
-  async function openInGoogleMaps() {
+  function openInGoogleMaps() {
     if (routePoints.length === 0 || typeof window === "undefined") return;
 
-    const popup = window.open("", "_blank", "noopener,noreferrer");
-    const navigateToMaps = (url: string) => openExternalPage(url, popup);
-
-    const liveLocation = await requestCurrentLocation();
-    const originLocation = liveLocation ?? currentLocation;
+    const originLocation = currentLocation;
+    // Atualiza a localizacao em segundo plano para as proximas aberturas sem bloquear o clique.
+    if (!originLocation) {
+      void requestCurrentLocation({ silent: true });
+    }
 
     if (routePoints.length === 1) {
       const [point] = routePoints;
@@ -575,13 +573,17 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           destination: `${point.latitude},${point.longitude}`,
         });
         const url = `https://www.google.com/maps/dir/?${params.toString()}`;
-        navigateToMaps(url);
+        if (!openExternalPage(url)) {
+          setLocationError("Nao foi possivel abrir nova aba. Permita pop-ups para este site.");
+        }
         return;
       }
 
       const query = `${point.latitude},${point.longitude}`;
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
-      navigateToMaps(url);
+      if (!openExternalPage(url)) {
+        setLocationError("Nao foi possivel abrir nova aba. Permita pop-ups para este site.");
+      }
       return;
     }
 
@@ -589,8 +591,10 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
       ? `${originLocation.latitude},${originLocation.longitude}`
       : `${routePoints[0].latitude},${routePoints[0].longitude}`;
     const destination = `${routePoints[routePoints.length - 1].latitude},${routePoints[routePoints.length - 1].longitude}`;
-    const waypoints = routePoints
-      .slice(0, -1)
+    const waypointPoints = originLocation
+      ? routePoints.slice(0, -1)
+      : routePoints.slice(1, -1);
+    const waypoints = waypointPoints
       .map((point) => `${point.latitude},${point.longitude}`)
       .join("|");
 
@@ -606,7 +610,9 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
     }
 
     const url = `https://www.google.com/maps/dir/?${params.toString()}`;
-    navigateToMaps(url);
+    if (!openExternalPage(url)) {
+      setLocationError("Nao foi possivel abrir nova aba. Permita pop-ups para este site.");
+    }
   }
 
   function downloadRouteExcel() {
