@@ -50,7 +50,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
         />
 
         <nav className="flex items-center gap-5">
-          {navLink("/admin", "Analytics")}
+          {navLink("/admin", "Analytics Paradas")}
 
           {/* Dropdown Produttivo */}
           <div className="relative">
