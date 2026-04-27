@@ -246,14 +246,23 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
         <button
           type="button"
           onClick={() => setIsDrawerOpen(true)}
-          className="inline-flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:bg-slate-50"
+          className="flex h-12 w-full items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 shadow-[0_12px_24px_-20px_rgba(15,23,42,0.45)] transition active:scale-[0.98]"
         >
-          Filtros
+          <span className="flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-500">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="8" y1="12" x2="20" y2="12" />
+              <line x1="12" y1="18" x2="20" y2="18" />
+            </svg>
+            Filtros
+          </span>
           {activeFiltersCount > 0 ? (
-            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
-              {activeFiltersCount}
+            <span className="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-700">
+              {activeFiltersCount} ativo{activeFiltersCount > 1 ? "s" : ""}
             </span>
-          ) : null}
+          ) : (
+            <span className="text-xs text-slate-400">Nenhum ativo</span>
+          )}
         </button>
       </div>
 
@@ -333,17 +342,25 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
                   <h3 className="text-base font-semibold text-slate-900">Filtros</h3>
                   <p className="mt-1 text-xs text-slate-500">Ajuste a busca antes de navegar pela tabela.</p>
                 </div>
-                <div className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
-                  {activeFiltersCount} ativos
+                <div className="flex items-center gap-2">
+                  {activeFiltersCount > 0 && (
+                    <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-xs font-semibold text-teal-700">
+                      {activeFiltersCount} ativo{activeFiltersCount > 1 ? "s" : ""}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsDrawerOpen(false)}
+                    aria-label="Fechar painel de filtros"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-500 transition active:scale-95"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsDrawerOpen(false)}
-                className="mt-3 rounded-lg border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Fechar
-              </button>
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -398,18 +415,18 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
               </section>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white/90 p-4">
+            <div className="grid grid-cols-2 gap-2 border-t border-slate-200 bg-white/90 p-4 pb-[max(1rem,_env(safe-area-inset-bottom))]">
               <button
                 type="button"
                 onClick={clearFilters}
-                className="h-10 rounded-lg border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="h-12 rounded-xl border border-slate-300 px-3 text-sm font-medium text-slate-700 transition active:scale-95 hover:bg-slate-50"
               >
                 Limpar
               </button>
               <button
                 type="button"
                 onClick={() => setIsDrawerOpen(false)}
-                className="h-10 rounded-lg border border-blue-300 bg-blue-50 px-3 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                className="h-12 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white transition active:scale-95 hover:bg-slate-800"
               >
                 Aplicar
               </button>

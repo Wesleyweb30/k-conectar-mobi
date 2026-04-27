@@ -230,7 +230,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
               </span>
             </div>
           </div>
-          <div className="w-full max-w-xs rounded-[1.6rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_20px_35px_-25px_rgba(15,23,42,0.5)]">
+          <div className="w-full rounded-[1.6rem] border border-slate-200/80 bg-white/85 p-4 shadow-[0_20px_35px_-25px_rgba(15,23,42,0.5)] md:max-w-xs">
             <div className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Resumo rapido</div>
             <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">{total}</div>
             <div className="mt-1 text-sm text-slate-600">
@@ -245,11 +245,11 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
           </div>
         </div>
 
-        <div className="relative mt-6 grid gap-3 md:grid-cols-3">
+        <div className="relative mt-6 -mx-5 flex gap-3 overflow-x-auto px-5 pb-1 md:mx-0 md:grid md:grid-cols-3 md:overflow-visible md:px-0 md:pb-0">
           {summaryCards.map((card) => (
             <div
               key={card.label}
-              className={`rounded-[1.5rem] border bg-gradient-to-br p-4 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.45)] ${card.tone}`}
+              className={`min-w-[180px] shrink-0 rounded-[1.5rem] border bg-gradient-to-br p-4 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.45)] md:min-w-0 md:shrink ${card.tone}`}
             >
               <div className="text-[11px] uppercase tracking-[0.18em] text-current/70">{card.label}</div>
               <div className="mt-2 text-2xl font-semibold tracking-tight">{card.value}</div>
