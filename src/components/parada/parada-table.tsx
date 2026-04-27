@@ -824,7 +824,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                       disabled={parada.latitude === null || parada.longitude === null}
                       onClick={(event) => event.stopPropagation()}
                       onChange={() => toggleRouteSelection(parada)}
-                      className="h-4 w-4 accent-blue-600 disabled:cursor-not-allowed"
+                      className="h-5 w-5 accent-blue-600 disabled:cursor-not-allowed"
                       aria-label={`Selecionar parada ${parada.codigo} para rota`}
                     />
                   </div>
@@ -970,32 +970,32 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
               ) : null}
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-2 gap-2 w-full md:flex md:w-auto md:flex-wrap">
               <button
                 type="button"
                 onClick={() => {
                   void requestCurrentLocation();
                 }}
                 disabled={isRequestingLocation}
-                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="col-span-2 h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-1 md:h-9 md:rounded-lg"
               >
                 {isRequestingLocation
-                  ? "Solicitando localizacao..."
+                  ? "Solicitando..."
                   : currentLocation
-                    ? "Atualizar localizacao"
-                    : "Usar localizacao do smartphone"}
+                    ? "Atualizar localização"
+                    : "Usar localização"}
               </button>
               <button
                 type="button"
                 onClick={selectAllWithCoordinates}
-                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                className="h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 md:h-9 md:rounded-lg"
               >
                 Selecionar página
               </button>
               <button
                 type="button"
                 onClick={() => dispatchRouteSelection({ type: "clear" })}
-                className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
+                className="h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 md:h-9 md:rounded-lg"
               >
                 Limpar rota
               </button>
@@ -1003,7 +1003,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                 type="button"
                 onClick={openInGoogleMaps}
                 disabled={routePoints.length === 0}
-                className="h-9 rounded-lg border border-blue-300 px-3 text-sm text-blue-700 transition duration-200 hover:-translate-y-0.5 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="col-span-2 h-11 rounded-xl border border-blue-300 bg-blue-50/50 px-3 text-sm font-medium text-blue-700 transition duration-200 hover:-translate-y-0.5 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-1 md:h-9 md:rounded-lg md:bg-transparent md:font-normal"
               >
                 Abrir no Google Maps
               </button>
@@ -1011,7 +1011,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                 type="button"
                 onClick={downloadRouteExcel}
                 disabled={routePoints.length === 0}
-                className="h-9 rounded-lg border border-violet-300 px-3 text-sm text-violet-700 transition duration-200 hover:-translate-y-0.5 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-11 rounded-xl border border-violet-300 px-3 text-sm text-violet-700 transition duration-200 hover:-translate-y-0.5 hover:bg-violet-50 disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:rounded-lg"
               >
                 Exportar Excel
               </button>
@@ -1019,7 +1019,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                 type="button"
                 onClick={downloadRouteKml}
                 disabled={routePoints.length === 0}
-                className="h-9 rounded-lg border border-amber-300 px-3 text-sm text-amber-700 transition duration-200 hover:-translate-y-0.5 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="h-11 rounded-xl border border-amber-300 px-3 text-sm text-amber-700 transition duration-200 hover:-translate-y-0.5 hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:rounded-lg"
               >
                 Exportar KML
               </button>
@@ -1094,7 +1094,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           role="dialog"
           aria-modal="true"
           aria-label="Detalhes da parada"
-          className={`absolute right-0 top-0 h-full w-full max-w-xl bg-white shadow-2xl transition-transform duration-300 ${
+          className={`absolute right-0 top-0 z-10 h-full w-full max-w-xl bg-white shadow-2xl transition-transform duration-300 ${
             selectedParada ? "translate-x-0" : "translate-x-full"
           }`}
         >
@@ -1113,9 +1113,13 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
                 <button
                   type="button"
                   onClick={() => setSelectedId(null)}
-                  className="h-9 px-3 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-100"
+                  aria-label="Fechar detalhes"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-gray-300 text-gray-500 hover:bg-gray-100"
                 >
-                  Fechar
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
                 </button>
               </div>
 
