@@ -1,5 +1,8 @@
-﻿import Link from "next/link";
-import type { ProduttivoManutencaoItem } from "@/types/produttivo";
+﻿"use client";
+
+import Link from "next/link";
+import { useState } from "react";
+import type { ProduttivoManutencaoItem, ProduttivoFieldValue } from "@/types/produttivo";
 
 const PER_PAGE = 20;
 
@@ -87,6 +90,72 @@ const accentStyles = {
   },
 };
 
+const VISIBLE_FIELDS = 6;
+
+/** Campos prioritários — exibidos primeiro, na ordem definida */
+const PRIORITY_FIELDS: string[] = [
+  "DATA E HORA - INICIO DE SERVIÇO",
+  "DATA E HORA - FIM DE SERVIÇO",
+  "SERVIÇO EXECUTADO",
+  "EXECUTOR DO SERVIÇO",
+  "TIPO DO SERVIÇO",
+  "TIPO DO EQUIPAMENTO - POSTERIOR",
+  "NOVA TIPOLOGIA KALLAS - POSTERIOR",
+  "TIPO DO EQUIPAMENTO - ANTERIOR",
+  "OBSERVAÇÃO",
+  "ADESIVO",
+];
+
+function priorityIndex(name: string | null | undefined): number {
+  if (!name) return Infinity;
+  const upper = name.trim().toUpperCase();
+  const idx = PRIORITY_FIELDS.findIndex((p) => upper.includes(p) || p.includes(upper));
+  return idx === -1 ? Infinity : idx;
+}
+
+function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const sorted = [...fieldValues.filter((fv) => fv.name)].sort(
+    (a, b) => priorityIndex(a.name) - priorityIndex(b.name)
+  );
+
+  const visible = expanded ? sorted : sorted.slice(0, VISIBLE_FIELDS);
+  const hiddenCount = sorted.length - VISIBLE_FIELDS;
+
+  return (
+    <div className="mt-3">
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+        {visible.map((fv, idx) => {
+          const displayValue = Array.isArray(fv.value)
+            ? fv.value.join(", ")
+            : (fv.value ?? "---");
+          return (
+            <div key={idx} className="flex flex-col">
+              <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                {fv.name}
+              </dt>
+              <dd className="mt-0.5 text-sm text-slate-800 break-words">
+                {displayValue || "---"}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+
+      {hiddenCount > 0 && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-3 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+        >
+          {expanded ? "▲ Mostrar menos" : `▼ Ver mais ${hiddenCount} campo${hiddenCount !== 1 ? "s" : ""}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+
 export default function ProduttivoFillList({
   items,
   total,
@@ -150,25 +219,7 @@ export default function ProduttivoFillList({
             </div>
 
             {item.field_values.length > 0 && (
-              <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-                {item.field_values.map((fv, idx) => {
-                  if (!fv.name) return null;
-                  const displayValue = Array.isArray(fv.value)
-                    ? fv.value.join(", ")
-                    : (fv.value ?? "---");
-
-                  return (
-                    <div key={idx} className="flex flex-col">
-                      <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-                        {fv.name}
-                      </dt>
-                      <dd className="mt-0.5 text-sm text-slate-800 break-words">
-                        {displayValue || "---"}
-                      </dd>
-                    </div>
-                  );
-                })}
-              </dl>
+              <FieldList fieldValues={item.field_values} />
             )}
           </div>
         );
