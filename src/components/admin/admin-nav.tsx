@@ -123,6 +123,18 @@ export default function AdminNav({ userName }: AdminNavProps) {
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
                   Instalação Elétrica
                 </Link>
+                <Link
+                  href="/admin/produttivo/ligacao-paradas"
+                  onClick={() => setProduttivoOpen(false)}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
+                    pathname.startsWith("/admin/produttivo/ligacao-paradas")
+                      ? "bg-cyan-50 text-cyan-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full bg-cyan-400" />
+                  Radar Sem Manutenção
+                </Link>
               </div>
             )}
           </div>
