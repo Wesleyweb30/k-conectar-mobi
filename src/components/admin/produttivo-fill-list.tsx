@@ -12,7 +12,7 @@ type Props = {
   page: number;
   basePath: string;
   preserveParams?: Record<string, string>;
-  accentColor?: "amber" | "sky";
+  accentColor?: "amber" | "sky" | "emerald";
   pedMap?: PedMap;
   idLabel?: string;
   preferFieldActivityId?: boolean;
@@ -78,6 +78,12 @@ const accentStyles = {
     dot: "bg-sky-400",
     pagActive: "bg-sky-500 text-white border-sky-500",
     pagHover: "hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700",
+  },
+  emerald: {
+    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    dot: "bg-emerald-400",
+    pagActive: "bg-emerald-500 text-white border-emerald-500",
+    pagHover: "hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700",
   },
 };
 

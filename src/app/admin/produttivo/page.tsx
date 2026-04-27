@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import {
   FORM_ID_IMPLANTACAO,
+  FORM_ID_INSTALACAO_ELETRICA,
   FORM_ID_MANUTENCAO,
   getProduttivoAccountMembers,
   getProduttivoFormFillCount,
@@ -52,12 +53,13 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
     const apiStart = toApiDate(rawStart);
     const apiEnd = toApiDate(rawEnd);
 
-    const [manuCount, implCount] = await Promise.all([
+    const [manuCount, implCount, eletricaCount] = await Promise.all([
       getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_MANUTENCAO, userId: rawUserId }),
       getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_IMPLANTACAO, userId: rawUserId }),
+      getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_INSTALACAO_ELETRICA, userId: rawUserId }),
     ]);
 
-    const total = manuCount + implCount;
+    const total = manuCount + implCount + eletricaCount;
     const memberName = rawUserId
       ? (members.find((m) => m.id === rawUserId)?.name ?? `ID ${rawUserId}`)
       : "Todos";
@@ -77,7 +79,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
           <strong>{memberName}</strong>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <MetricCard
             label="Manutenção"
             value={manuCount}
@@ -91,6 +93,13 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
             color="sky"
             description="Formulários de implantação no período"
             href="/admin/produttivo/implantacao"
+          />
+          <MetricCard
+            label="Instalação Elétrica"
+            value={eletricaCount}
+            color="emerald"
+            description="Formulários de instalação elétrica no período"
+            href="/admin/produttivo/instalacao-eletrica"
           />
           <MetricCard
             label="Total"
@@ -108,7 +117,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
     getMonthRange(now.getFullYear(), now.getMonth() - offset)
   );
 
-  const [manuCounts, implCounts] = await Promise.all([
+  const [manuCounts, implCounts, eletricaCounts] = await Promise.all([
     Promise.all(
       monthRanges.map((m) =>
         getProduttivoFormFillCount({
@@ -129,13 +138,24 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
         })
       )
     ),
+    Promise.all(
+      monthRanges.map((m) =>
+        getProduttivoFormFillCount({
+          startDate: m.start,
+          endDate: m.end,
+          formId: FORM_ID_INSTALACAO_ELETRICA,
+          userId: rawUserId,
+        })
+      )
+    ),
   ]);
 
   const monthData = monthRanges.map((m, i) => ({
     label: m.label,
     manutencao: manuCounts[i],
     implantacao: implCounts[i],
-    total: manuCounts[i] + implCounts[i],
+    eletrica: eletricaCounts[i],
+    total: manuCounts[i] + implCounts[i] + eletricaCounts[i],
   }));
 
   const maxTotal = Math.max(...monthData.map((d) => d.total), 1);
@@ -149,7 +169,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
       </Suspense>
 
       {/* Cards resumo do mês atual */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <MetricCard
           label="Manutenção — mês atual"
           value={monthData[0].manutencao}
@@ -163,6 +183,13 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
           color="sky"
           description={monthData[0].label}
           href="/admin/produttivo/implantacao"
+        />
+        <MetricCard
+          label="Inst. Elétrica — mês atual"
+          value={monthData[0].eletrica}
+          color="emerald"
+          description={monthData[0].label}
+          href="/admin/produttivo/instalacao-eletrica"
         />
         <MetricCard
           label="Total — mês atual"
@@ -189,6 +216,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
             const barPercent = (item.total / maxTotal) * 100;
             const manuPercent = item.total > 0 ? (item.manutencao / item.total) * 100 : 0;
             const implPercent = item.total > 0 ? (item.implantacao / item.total) * 100 : 0;
+            const eletricaPercent = item.total > 0 ? (item.eletrica / item.total) * 100 : 0;
 
             return (
               <div
@@ -219,6 +247,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
                   >
                     <div className="h-full bg-amber-400" style={{ width: `${manuPercent.toFixed(1)}%` }} />
                     <div className="h-full bg-sky-400" style={{ width: `${implPercent.toFixed(1)}%` }} />
+                    <div className="h-full bg-emerald-400" style={{ width: `${eletricaPercent.toFixed(1)}%` }} />
                   </div>
                 </div>
 
@@ -231,6 +260,10 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
                   <span className="flex items-center gap-1.5 text-xs text-slate-600">
                     <span className="inline-block h-2 w-2 rounded-full bg-sky-400" />
                     Implantação: <strong>{item.implantacao}</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
+                    Inst. Elétrica: <strong>{item.eletrica}</strong>
                   </span>
                 </div>
               </div>
@@ -248,7 +281,7 @@ function PageHeader() {
       <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
         Analytics · Produttivo
       </span>
-      <h1 className="mt-2 text-2xl font-bold text-slate-900">Manutenção &amp; Implantação</h1>
+      <h1 className="mt-2 text-2xl font-bold text-slate-900">Manutenção, Implantação &amp; Elétrica</h1>
       <p className="mt-1 text-sm text-slate-600">
         Contagem de registros por mês e por tipo de serviço com base nos formulários do Produttivo.
       </p>
@@ -259,7 +292,7 @@ function PageHeader() {
 type MetricCardProps = {
   label: string;
   value: number;
-  color: "amber" | "sky" | "violet";
+  color: "amber" | "sky" | "violet" | "emerald";
   description?: string;
   href?: string;
 };
@@ -268,12 +301,14 @@ const colorMap: Record<MetricCardProps["color"], string> = {
   amber: "border-amber-200 bg-amber-50/60 text-amber-700 [&_strong]:text-amber-900",
   sky: "border-sky-200 bg-sky-50/60 text-sky-700 [&_strong]:text-sky-900",
   violet: "border-violet-200 bg-violet-50/60 text-violet-700 [&_strong]:text-violet-900",
+  emerald: "border-emerald-200 bg-emerald-50/60 text-emerald-700 [&_strong]:text-emerald-900",
 };
 
 const hoverMap: Record<MetricCardProps["color"], string> = {
   amber: "hover:bg-amber-100/80",
   sky: "hover:bg-sky-100/80",
   violet: "hover:bg-violet-100/80",
+  emerald: "hover:bg-emerald-100/80",
 };
 
 function MetricCard({ label, value, color, description, href }: MetricCardProps) {
