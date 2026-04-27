@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useReducer, useState } from "react";
 import * as XLSX from "xlsx";
 import ParadaRouteMap from "@/components/parada/parada-route-map";
+import { ROUTE_SELECTION_TTL_MS, ROUTE_STORAGE_KEY } from "@/lib/session-policy";
 
 type ParadaRow = {
   id: string;
@@ -48,45 +49,108 @@ type CurrentLocation = {
   capturedAt: string;
 };
 
-const ROUTE_STORAGE_KEY = "kconectar.paradas.routeSelection.v1";
+type RouteSelectionState = {
+  items: RouteSelectionItem[];
+  expiresAt: number | null;
+};
 
-function readStoredSelection(): RouteSelectionItem[] {
-  if (typeof window === "undefined") return [];
+function sanitizeRouteSelection(input: unknown): RouteSelectionItem[] {
+  if (!Array.isArray(input)) return [];
+
+  return input
+    .filter(
+      (item) =>
+        Boolean(
+          item &&
+            typeof item === "object" &&
+            typeof item.id === "string" &&
+            typeof item.codigo === "string" &&
+            typeof item.latitude === "number" &&
+            typeof item.longitude === "number",
+        ),
+    )
+    .map((item) => {
+      const routeItem = item as Record<string, unknown>;
+
+      return {
+        id: routeItem.id as string,
+        codigo: routeItem.codigo as string,
+        municipio: typeof routeItem.municipio === "string" ? routeItem.municipio : null,
+        bairro: typeof routeItem.bairro === "string" ? routeItem.bairro : null,
+        logradouro: typeof routeItem.logradouro === "string" ? routeItem.logradouro : null,
+        quantidadeAbrigosTotens:
+          typeof routeItem.quantidadeAbrigosTotens === "number"
+            ? routeItem.quantidadeAbrigosTotens
+            : null,
+        tipologiaAtual:
+          typeof routeItem.tipologiaAtual === "string" ? routeItem.tipologiaAtual : null,
+        novaTipologia:
+          typeof routeItem.novaTipologia === "string" ? routeItem.novaTipologia : null,
+        latitude: routeItem.latitude as number,
+        longitude: routeItem.longitude as number,
+      };
+    });
+}
+
+function buildRouteSelectionState(items: RouteSelectionItem[]): RouteSelectionState {
+  return {
+    items,
+    expiresAt: items.length > 0 ? Date.now() + ROUTE_SELECTION_TTL_MS : null,
+  };
+}
+
+function readStoredSelectionState(): RouteSelectionState {
+  if (typeof window === "undefined") return { items: [], expiresAt: null };
 
   const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
-  if (!raw) return [];
+  if (!raw) return { items: [], expiresAt: null };
 
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
 
-    return parsed
-      .filter(
-        (item) =>
-          Boolean(
-            item &&
-              typeof item.id === "string" &&
-              typeof item.codigo === "string" &&
-              typeof item.latitude === "number" &&
-              typeof item.longitude === "number",
-          ),
-      )
-      .map((item) => ({
-        id: item.id,
-        codigo: item.codigo,
-        municipio: typeof item.municipio === "string" ? item.municipio : null,
-        bairro: typeof item.bairro === "string" ? item.bairro : null,
-        logradouro: typeof item.logradouro === "string" ? item.logradouro : null,
-        quantidadeAbrigosTotens:
-          typeof item.quantidadeAbrigosTotens === "number" ? item.quantidadeAbrigosTotens : null,
-        tipologiaAtual: typeof item.tipologiaAtual === "string" ? item.tipologiaAtual : null,
-        novaTipologia: typeof item.novaTipologia === "string" ? item.novaTipologia : null,
-        latitude: item.latitude,
-        longitude: item.longitude,
-      }));
+    if (Array.isArray(parsed)) {
+      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+      return { items: [], expiresAt: null };
+    }
+
+    if (!parsed || typeof parsed !== "object") {
+      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+      return { items: [], expiresAt: null };
+    }
+
+    const expiresAt = typeof parsed.expiresAt === "number" ? parsed.expiresAt : null;
+    const items = sanitizeRouteSelection((parsed as { items?: unknown }).items);
+
+    if (!expiresAt || expiresAt <= Date.now() || items.length === 0) {
+      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+      return { items: [], expiresAt: null };
+    }
+
+    return { items, expiresAt };
   } catch {
-    return [];
+    window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+    return { items: [], expiresAt: null };
   }
+}
+
+type RouteSelectionAction =
+  | { type: "set"; items: RouteSelectionItem[] }
+  | { type: "update"; updater: (items: RouteSelectionItem[]) => RouteSelectionItem[] }
+  | { type: "clear" };
+
+function routeSelectionReducer(
+  state: RouteSelectionState,
+  action: RouteSelectionAction,
+): RouteSelectionState {
+  if (action.type === "clear") {
+    return { items: [], expiresAt: null };
+  }
+
+  if (action.type === "set") {
+    return buildRouteSelectionState(action.items);
+  }
+
+  return buildRouteSelectionState(action.updater(state.items));
 }
 
 function displayValue(value: string | number | null | undefined) {
@@ -160,17 +224,46 @@ type ExportAllRow = {
 };
 
 export default function ParadaTable({ paradas, routeMode = false }: Props) {
+  const [initialRouteSelectionState] = useState<RouteSelectionState>(() =>
+    routeMode ? readStoredSelectionState() : { items: [], expiresAt: null },
+  );
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [routeSelection, setRouteSelection] = useState<RouteSelectionItem[]>(() =>
-    routeMode ? readStoredSelection() : [],
+  const [routeSelectionState, dispatchRouteSelection] = useReducer(
+    routeSelectionReducer,
+    initialRouteSelectionState,
   );
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const routeSelection = routeSelectionState.items;
 
   useEffect(() => {
     if (!routeMode || typeof window === "undefined") return;
-    window.localStorage.setItem(ROUTE_STORAGE_KEY, JSON.stringify(routeSelection));
-  }, [routeMode, routeSelection]);
+    if (routeSelectionState.items.length === 0 || !routeSelectionState.expiresAt) {
+      window.localStorage.removeItem(ROUTE_STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(
+      ROUTE_STORAGE_KEY,
+      JSON.stringify({
+        items: routeSelectionState.items,
+        expiresAt: routeSelectionState.expiresAt,
+      }),
+    );
+  }, [routeMode, routeSelectionState]);
+
+  useEffect(() => {
+    if (!routeMode || !routeSelectionState.expiresAt) return;
+
+    const timeoutMs = Math.max(routeSelectionState.expiresAt - Date.now(), 0);
+    const timeoutId = window.setTimeout(() => {
+      dispatchRouteSelection({ type: "clear" });
+    }, timeoutMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [routeMode, routeSelectionState.expiresAt]);
 
   useEffect(() => {
     if (!routeMode || typeof window === "undefined" || !("geolocation" in navigator)) return;
@@ -309,7 +402,9 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
   function toggleRouteSelection(parada: ParadaRow) {
     if (parada.latitude === null || parada.longitude === null) return;
 
-    setRouteSelection((prev) => {
+    dispatchRouteSelection({
+      type: "update",
+      updater: (prev) => {
       if (prev.some((item) => item.id === parada.id)) {
         return prev.filter((item) => item.id !== parada.id);
       }
@@ -329,37 +424,44 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
           longitude: parada.longitude,
         },
       ];
+      },
     });
   }
 
   function selectAllWithCoordinates() {
-    setRouteSelection((prev) => {
-      const idSet = new Set(prev.map((item) => item.id));
-      const next = [...prev];
+    dispatchRouteSelection({
+      type: "update",
+      updater: (prev) => {
+        const idSet = new Set(prev.map((item) => item.id));
+        const next = [...prev];
 
-      paradasWithCoordinates.forEach((parada) => {
-        if (idSet.has(parada.id)) return;
+        paradasWithCoordinates.forEach((parada) => {
+          if (idSet.has(parada.id)) return;
 
-        next.push({
-          id: parada.id,
-          codigo: parada.codigo,
-          municipio: parada.municipio,
-          bairro: parada.bairro,
-          logradouro: parada.logradouro,
-          quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
-          tipologiaAtual: parada.tipologiaAtual,
-          novaTipologia: parada.novaTipologia,
-          latitude: parada.latitude as number,
-          longitude: parada.longitude as number,
+          next.push({
+            id: parada.id,
+            codigo: parada.codigo,
+            municipio: parada.municipio,
+            bairro: parada.bairro,
+            logradouro: parada.logradouro,
+            quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
+            tipologiaAtual: parada.tipologiaAtual,
+            novaTipologia: parada.novaTipologia,
+            latitude: parada.latitude as number,
+            longitude: parada.longitude as number,
+          });
         });
-      });
 
-      return next;
+        return next;
+      },
     });
   }
 
   function removeFromRoute(id: string) {
-    setRouteSelection((prev) => prev.filter((item) => item.id !== id));
+    dispatchRouteSelection({
+      type: "update",
+      updater: (prev) => prev.filter((item) => item.id !== id),
+    });
   }
 
   async function openInGoogleMaps() {
@@ -726,7 +828,7 @@ export default function ParadaTable({ paradas, routeMode = false }: Props) {
               </button>
               <button
                 type="button"
-                onClick={() => setRouteSelection([])}
+                onClick={() => dispatchRouteSelection({ type: "clear" })}
                 className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50"
               >
                 Limpar rota
