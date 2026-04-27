@@ -4,6 +4,10 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import ShelterStatusDonut from "@/components/dashboard/shelter-status-donut";
 
+function formatNumber(value: number) {
+  return value.toLocaleString("pt-BR");
+}
+
 export default async function AdminPage() {
   const session = await auth.api.getSession({ headers: await headers() });
 
@@ -67,6 +71,8 @@ export default async function AdminPage() {
 
   const maxTipologiaAtualParadas = Math.max(...tipologiaAtualResumo.map((item) => item.quantidadeParadas), 1);
   const maxNovaTipologiaParadas = Math.max(...novaTipologiaResumo.map((item) => item.quantidadeParadas), 1);
+  const topTipologiaAtual = tipologiaAtualResumo[0];
+  const topNovaTipologia = novaTipologiaResumo[0];
 
   return (
     <div className="space-y-6">
@@ -78,8 +84,8 @@ export default async function AdminPage() {
             </span>
             <h1 className="mt-2 text-2xl font-bold text-slate-900">Analytics de paradas</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Bem-vindo, {session?.user.name}. Este painel concentra os indicadores analíticos.
-              Por enquanto, os gráficos são de paradas.
+              Bem-vindo, {session?.user.name}. Este painel concentra os principais indicadores
+              para acompanhamento da operação do parque de paradas.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -87,26 +93,32 @@ export default async function AdminPage() {
                 href="/paradas"
                 className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-100"
               >
-                Abrir paradas
+                Ver paradas
               </Link>
               <Link
                 href="/paradas/rotas"
                 className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
               >
-                Abrir roteirização
+                Ver rotas
               </Link>
               <Link
                 href="/admin/usuarios"
                 className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-semibold text-sky-800 transition hover:bg-sky-100"
               >
-                Abrir dados de usuários
+                Gerenciar usuários
+              </Link>
+              <Link
+                href="/admin/produttivo"
+                className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100"
+              >
+                Analytics Produttivo
               </Link>
             </div>
           </div>
 
           <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
             <p className="text-xs uppercase tracking-wide text-slate-500">Total de abrigos</p>
-            <p className="text-2xl font-semibold text-slate-900">{total}</p>
+            <p className="text-2xl font-semibold text-slate-900">{formatNumber(total)}</p>
             <p className="text-xs text-slate-500">base para este painel</p>
           </div>
         </div>
@@ -114,24 +126,62 @@ export default async function AdminPage() {
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Total de abrigos</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{total}</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{formatNumber(total)}</p>
           </div>
           <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-indigo-700">Total de paradas</p>
-            <p className="mt-1 text-xl font-semibold text-indigo-900">{totalParadas}</p>
+            <p className="mt-1 text-xl font-semibold text-indigo-900">{formatNumber(totalParadas)}</p>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-emerald-700">Ativo</p>
-            <p className="mt-1 text-xl font-semibold text-emerald-900">{ativoCount}</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-900">{formatNumber(ativoCount)}</p>
           </div>
           <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-amber-700">Sem informação</p>
-            <p className="mt-1 text-xl font-semibold text-amber-900">{semInfoCount}</p>
+            <p className="mt-1 text-xl font-semibold text-amber-900">{formatNumber(semInfoCount)}</p>
           </div>
           <div className="rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-blue-700">Reativado</p>
-            <p className="mt-1 text-xl font-semibold text-blue-900">{reativadoCount}</p>
+            <p className="mt-1 text-xl font-semibold text-blue-900">{formatNumber(reativadoCount)}</p>
           </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ação rápida</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">Conferir base de paradas</h2>
+          <p className="mt-1 text-sm text-slate-600">Acesse filtros completos para auditar município, bairro, status e tipologia.</p>
+          <Link
+            href="/paradas"
+            className="mt-4 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-800 transition hover:bg-blue-100"
+          >
+            Ir para paradas
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Ação rápida</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">Planejar roteirização</h2>
+          <p className="mt-1 text-sm text-slate-600">Visualize as paradas no mapa para apoiar o planejamento operacional.</p>
+          <Link
+            href="/paradas/rotas"
+            className="mt-4 inline-flex rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 transition hover:bg-emerald-100"
+          >
+            Ir para rotas
+          </Link>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Destaques da base</p>
+          <h2 className="mt-1 text-lg font-semibold text-slate-900">Resumo das tipologias</h2>
+          <p className="mt-2 text-sm text-slate-700">
+            Atual mais frequente: <span className="font-semibold text-slate-900">{topTipologiaAtual?.nome ?? "Sem tipologia"}</span>
+          </p>
+          <p className="mt-1 text-sm text-slate-700">
+            Nova mais frequente: <span className="font-semibold text-slate-900">{topNovaTipologia?.nome ?? "Sem tipologia"}</span>
+          </p>
+          <p className="mt-3 text-xs text-slate-500">Use os gráficos abaixo para explorar a distribuição completa.</p>
         </div>
       </div>
 
@@ -231,8 +281,8 @@ export default async function AdminPage() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-base font-semibold text-slate-900">Evolução futura do analytics</h2>
         <p className="mt-1 text-sm text-slate-600">
-          Este painel está preparado para receber novos blocos analíticos de tipologia, município,
-          cobertura e produtividade operacional.
+          Este painel está preparado para receber novos blocos analíticos de município,
+          cobertura territorial e produtividade operacional.
         </p>
       </div>
     </div>

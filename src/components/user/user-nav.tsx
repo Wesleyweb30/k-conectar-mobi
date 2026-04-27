@@ -22,8 +22,17 @@ export default function UserNav({ userName }: UserNavProps) {
 
   return (
     <header className="bg-white border-b border-gray-200">
-      <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-        <Image src="/kallas-logo-color.png" alt="K-Conectar Mobi" width={160} height={52} className="object-contain" priority />
+      <div className="max-w-5xl mx-auto px-4 h-20 flex items-center justify-between">
+        <Link href="/dashboard" className="inline-flex items-center" aria-label="Ir para home">
+          <Image
+            src="/kallas-logo-color.png"
+            alt="K-Conectar Mobi"
+            width={260}
+            height={85}
+            className="h-16 w-auto object-contain"
+            priority
+          />
+        </Link>
         <div className="flex items-center gap-4">
           <Link href="/dashboard" className="text-sm text-gray-600 hover:text-gray-800 font-medium">
             Início

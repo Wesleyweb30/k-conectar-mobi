@@ -1,110 +1,137 @@
 # Kallas Conectar Mobi
 
-Plataforma web para gestão e consulta de **paradas de ônibus** (abrigos/totens), com integração à API **Produttivo** para acompanhamento de inspeções de implantação e manutenção.
+Aplicação web para gestão e consulta de paradas de ônibus (abrigos/totens), com autenticação por perfil e integração com a API Produttivo.
 
 ## Visão Geral
 
 | Perfil | Acesso |
 |--------|--------|
-| **Usuário** | Consulta de paradas com filtros e visualização de rotas no mapa |
-| **Administrador** | Tudo acima + painel de KPIs, gerenciamento de usuários e relatórios do Produttivo |
+| Usuário | Consulta de paradas com filtros e visualização no mapa |
+| Administrador | Tudo acima + painel administrativo, gestão de usuários e módulos Produttivo |
 
-## Funcionalidades
+## Principais Funcionalidades
 
-- **Autenticação** — login com e-mail e senha via [Better Auth](https://better-auth.com), controle de sessão com timeout por inatividade.
-- **Paradas** — listagem paginada com filtros por código, status, município, bairro, logradouro e tipologia.
-- **Rotas no mapa** — visualização geoespacial das paradas usando [Leaflet](https://leafletjs.com).
-- **Dashboard admin** — KPIs de abrigos/totens (ativos, reativados, sem informação) e distribuição por tipologia atual/nova.
-- **Produttivo** — acompanhamento de preenchimentos de formulários de manutenção, implantação e instalação elétrica por período e responsável.
-- **Gerenciamento de usuários** — criação, listagem e controle de permissões no painel admin.
-- **Importação de paradas** — script de importação a partir de planilha Excel (`prisma/import-parada.ts`).
+- Login com e-mail e senha usando Better Auth.
+- Controle de acesso por papel (user e admin).
+- Lista de paradas com filtros por código, status, município, bairro, logradouro e tipologia.
+- Mapa de rotas/paradas com Leaflet.
+- Painel administrativo com indicadores de paradas.
+- Módulos Produttivo para manutenção, implantação, instalação elétrica e ligação de paradas.
+- Cadastro de usuários no painel administrativo.
+- Importação de paradas por planilha Excel.
 
-## Tecnologias
+## Stack
 
-- [Next.js 16](https://nextjs.org) — App Router, React Server Components
-- [React 19](https://react.dev) com React Compiler
-- [Prisma 7](https://www.prisma.io) + PostgreSQL
-- [Better Auth](https://better-auth.com) — autenticação + plugin admin
-- [Leaflet](https://leafletjs.com) — mapas interativos
-- [Tailwind CSS 4](https://tailwindcss.com)
-- [TypeScript 5](https://www.typescriptlang.org)
+- Next.js 16 (App Router)
+- React 19
+- TypeScript 5
+- Tailwind CSS 4
+- Prisma 7 + PostgreSQL
+- Better Auth
+- Leaflet
 
 ## Pré-requisitos
 
-- Node.js ≥ 18
-- PostgreSQL
-- Credenciais de acesso à API Produttivo
+- Node.js 18 ou superior
+- Banco PostgreSQL disponível
+- Credenciais da API Produttivo (para funcionalidades de integração)
 
-## Configuração
+## Configuração do Ambiente
 
-**1. Instale as dependências:**
+1. Instale as dependências:
 
 ```bash
 npm install
 ```
 
-**2. Configure as variáveis de ambiente** — crie um arquivo `.env` na raiz:
+2. Crie o arquivo .env na raiz do projeto:
 
 ```env
 DATABASE_URL="postgresql://usuario:senha@localhost:5432/kconectar"
 BETTER_AUTH_SECRET="sua_chave_secreta"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
-# API Produttivo
 PRODUTTIVO_BASE_URL="https://api.produttivo.com.br/api/v1"
 PRODUTTIVO_LOGIN="seu_login"
 PRODUTTIVO_REGISTER="seu_registro"
 PRODUTTIVO_TOKEN="seu_token"
 ```
 
-**3. Execute as migrations e gere o Prisma Client:**
+3. Aplique as migrations no banco local (desenvolvimento):
 
 ```bash
-npx prisma migrate deploy
-npx prisma generate
+npx prisma migrate dev
 ```
 
-**4. (Opcional) Importe as paradas a partir de planilha Excel:**
+4. Opcional: gere um admin inicial via seed:
+
+```bash
+npx tsx prisma/seed.ts
+```
+
+Credenciais padrão do seed:
+
+- E-mail: admin@admin.com
+- Senha: admin123
+
+## Rodando a Aplicação
+
+Desenvolvimento:
+
+```bash
+npm run dev
+```
+
+Produção:
+
+```bash
+npm run build
+npm run start
+```
+
+URL local: http://localhost:3000
+
+## Importação de Paradas (Excel)
+
+Script disponível:
 
 ```bash
 npm run import:parada
 ```
 
-## Executando
+Detalhes da importação:
 
-```bash
-# Desenvolvimento
-npm run dev
+- Arquivo esperado: doc/Parque.xlsx
+- Aba esperada: Parque
+- Operação: upsert por código da parada
 
-# Produção
-npm run build
-npm run start
-```
+## Rotas Principais
 
-Acesse [http://localhost:3000](http://localhost:3000). O sistema redireciona automaticamente para `/login`.
+- /: redireciona para login, dashboard ou admin conforme sessão/perfil.
+- /login: autenticação.
+- /dashboard: área do usuário comum.
+- /paradas: consulta de paradas.
+- /paradas/rotas: visualização no mapa.
+- /admin: painel administrativo.
+- /admin/produttivo: visão geral Produttivo.
+- /admin/produttivo/manutencao: registros de manutenção.
+- /admin/produttivo/implantacao: registros de implantação.
+- /admin/produttivo/instalacao-eletrica: registros de instalação elétrica.
+- /admin/produttivo/ligacao-paradas: ligação entre atividades e paradas.
+- /admin/usuarios: gerenciamento de usuários.
+- /api/auth/[...all]: endpoints do Better Auth.
 
-## Estrutura de Rotas
-
-```
-/                              → redireciona conforme perfil do usuário
-/login                         → autenticação
-/dashboard                     → painel do usuário
-/paradas                       → consulta de paradas (usuário e admin)
-/paradas/rotas                 → mapa de rotas
-/admin                         → painel admin com KPIs de paradas
-/admin/produttivo              → analytics Produttivo (comparativo mensal)
-/admin/produttivo/manutencao   → registros de manutenção
-/admin/produttivo/implantacao  → registros de implantação
-/admin/produttivo/instalacao-eletrica → registros de instalação elétrica
-/admin/usuarios                → gerenciamento de usuários
-```
-
-## Scripts Disponíveis
+## Scripts
 
 | Comando | Descrição |
 |---------|-----------|
-| `npm run dev` | Servidor de desenvolvimento |
-| `npm run build` | Gera Prisma Client e faz build de produção |
-| `npm run start` | Inicia o servidor de produção |
-| `npm run lint` | Verificação estática com ESLint |
-| `npm run import:parada` | Importa paradas de planilha Excel para o banco |
+| npm run dev | Inicia o servidor de desenvolvimento |
+| npm run build | Gera Prisma Client e build de produção |
+| npm run start | Sobe a aplicação em modo produção |
+| npm run lint | Executa verificação com ESLint |
+| npm run import:parada | Importa/atualiza paradas a partir da planilha |
+
+## Observações
+
+- O middleware protege as rotas principais e redireciona usuários sem sessão para /login.
+- Rotas /admin exigem perfil admin.
