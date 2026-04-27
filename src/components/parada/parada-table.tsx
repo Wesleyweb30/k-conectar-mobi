@@ -232,8 +232,18 @@ function promptFileName(defaultBaseName: string, extension: ".xlsx" | ".kml") {
 function openExternalPage(url: string, targetWindow?: Window | null) {
   if (typeof window === "undefined") return false;
 
-  if (targetWindow) {
-    targetWindow.location.href = url;
+  if (targetWindow && !targetWindow.closed) {
+    try {
+      targetWindow.location.replace(url);
+      targetWindow.focus();
+      return true;
+    } catch {
+      targetWindow.close();
+    }
+  }
+
+  const popup = window.open(url, "_blank", "noopener,noreferrer");
+  if (popup) {
     return true;
   }
 
@@ -244,6 +254,11 @@ function openExternalPage(url: string, targetWindow?: Window | null) {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+
+  if (!document.hidden) {
+    window.location.assign(url);
+  }
+
   return true;
 }
 
