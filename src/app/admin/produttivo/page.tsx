@@ -199,25 +199,23 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
         />
       </div>
 
-      {/* Comparativo 3 meses */}
+      {/* Comparativo geral 3 meses */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Comparativo mensal</h2>
+          <h2 className="text-base font-semibold text-slate-900">Comparativo geral</h2>
           <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
             3 meses
           </span>
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          Contagem de registros de manutenção e implantação por mês.
+          Soma de todos os formulários por mês.
         </p>
-
         <div className="mt-5 space-y-4">
           {monthData.map((item, idx) => {
             const barPercent = (item.total / maxTotal) * 100;
             const manuPercent = item.total > 0 ? (item.manutencao / item.total) * 100 : 0;
             const implPercent = item.total > 0 ? (item.implantacao / item.total) * 100 : 0;
             const eletricaPercent = item.total > 0 ? (item.eletrica / item.total) * 100 : 0;
-
             return (
               <div
                 key={item.label}
@@ -227,31 +225,18 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
                   <div>
                     <p className="text-sm font-semibold capitalize text-slate-800">{item.label}</p>
                     {idx === 0 && (
-                      <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">
-                        mês atual
-                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-violet-600">mês atual</span>
                     )}
                   </div>
                   <p className="text-lg font-bold text-slate-900">{item.total}</p>
                 </div>
-
-                {/* Barra empilhada */}
-                <div
-                  className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200"
-                  role="img"
-                  aria-label={`Total ${item.total} registros em ${item.label}`}
-                >
-                  <div
-                    className="flex h-full rounded-full overflow-hidden"
-                    style={{ width: `${barPercent.toFixed(1)}%` }}
-                  >
+                <div className="mt-3 h-3 overflow-hidden rounded-full bg-slate-200" role="img" aria-label={`Total ${item.total} em ${item.label}`}>
+                  <div className="flex h-full overflow-hidden rounded-full" style={{ width: `${barPercent.toFixed(1)}%` }}>
                     <div className="h-full bg-amber-400" style={{ width: `${manuPercent.toFixed(1)}%` }} />
                     <div className="h-full bg-sky-400" style={{ width: `${implPercent.toFixed(1)}%` }} />
                     <div className="h-full bg-emerald-400" style={{ width: `${eletricaPercent.toFixed(1)}%` }} />
                   </div>
                 </div>
-
-                {/* Legenda */}
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
                   <span className="flex items-center gap-1.5 text-xs text-slate-600">
                     <span className="inline-block h-2 w-2 rounded-full bg-amber-400" />
@@ -270,6 +255,89 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
             );
           })}
         </div>
+      </div>
+
+      {/* Comparativos individuais por formulário */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <IndividualMonthCard
+          title="Manutenção"
+          href="/admin/produttivo/manutencao"
+          color="amber"
+          data={monthData.map((m) => ({ label: m.label, count: m.manutencao }))}
+        />
+        <IndividualMonthCard
+          title="Implantação"
+          href="/admin/produttivo/implantacao"
+          color="sky"
+          data={monthData.map((m) => ({ label: m.label, count: m.implantacao }))}
+        />
+        <IndividualMonthCard
+          title="Instalação Elétrica"
+          href="/admin/produttivo/instalacao-eletrica"
+          color="emerald"
+          data={monthData.map((m) => ({ label: m.label, count: m.eletrica }))}
+        />
+      </div>
+    </div>
+  );
+}
+
+type IndividualMonthCardProps = {
+  title: string;
+  href: string;
+  color: "amber" | "sky" | "emerald";
+  data: { label: string; count: number }[];
+};
+
+const individualColorMap: Record<IndividualMonthCardProps["color"], { border: string; bg: string; bar: string; text: string; badge: string }> = {
+  amber: { border: "border-amber-200", bg: "bg-amber-50/40", bar: "bg-amber-400", text: "text-amber-700", badge: "border-amber-200 bg-amber-50 text-amber-700" },
+  sky:   { border: "border-sky-200",   bg: "bg-sky-50/40",   bar: "bg-sky-400",   text: "text-sky-700",   badge: "border-sky-200 bg-sky-50 text-sky-700" },
+  emerald: { border: "border-emerald-200", bg: "bg-emerald-50/40", bar: "bg-emerald-400", text: "text-emerald-700", badge: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+};
+
+function IndividualMonthCard({ title, href, color, data }: IndividualMonthCardProps) {
+  const c = individualColorMap[color];
+  const max = Math.max(...data.map((d) => d.count), 1);
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
+        <Link
+          href={href}
+          className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition hover:opacity-80 ${c.badge}`}
+        >
+          Ver registros →
+        </Link>
+      </div>
+      <div className="mt-4 space-y-3">
+        {data.map((item, idx) => {
+          const percent = (item.count / max) * 100;
+          return (
+            <div
+              key={item.label}
+              className={`rounded-xl border px-4 py-3 ${idx === 0 ? `${c.border} ${c.bg}` : "border-slate-200 bg-slate-50/60"}`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold capitalize text-slate-800">{item.label}</p>
+                  {idx === 0 && (
+                    <span className={`text-[10px] font-semibold uppercase tracking-wide ${c.text}`}>
+                      mês atual
+                    </span>
+                  )}
+                </div>
+                <p className="text-lg font-bold text-slate-900">{item.count}</p>
+              </div>
+              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                <div className={`h-full rounded-full ${c.bar}`} style={{ width: `${percent.toFixed(1)}%` }} />
+              </div>
+              <p className="mt-1 text-right text-[11px] text-slate-500">
+                {percent.toFixed(1)}% do maior volume
+              </p>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
