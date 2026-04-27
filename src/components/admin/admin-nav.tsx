@@ -41,6 +41,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
   }
 
   return (
+    <>
     <header className="bg-white border-b border-gray-200">
       <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between md:h-20">
         <Link href="/admin" className="inline-flex items-center" aria-label="Ir para home do admin">
@@ -237,8 +238,9 @@ export default function AdminNav({ userName }: AdminNavProps) {
           </button>
         </nav>
       </div>
+    </header>
 
-      {/* Mobile menu overlay */}
+      {/* Mobile menu overlay - fora do header para evitar stacking context */}
       <div
         className={`fixed inset-0 z-50 transition md:hidden ${
           mobileMenuOpen ? "pointer-events-auto" : "pointer-events-none"
@@ -340,6 +342,6 @@ export default function AdminNav({ userName }: AdminNavProps) {
           </div>
         </aside>
       </div>
-    </header>
+    </>
   );
 }

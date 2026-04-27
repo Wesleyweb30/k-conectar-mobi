@@ -43,6 +43,7 @@ export default function UserNav({ userName }: UserNavProps) {
   }
 
   return (
+    <>
     <header className="border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4">
         <Link
@@ -91,7 +92,9 @@ export default function UserNav({ userName }: UserNavProps) {
         </button>
       </div>
 
-      {/* Mobile menu overlay */}
+    </header>
+
+      {/* Mobile menu overlay - fora do header para evitar stacking context */}
       <div
         className={`fixed inset-0 z-50 transition md:hidden ${
           mobileMenuOpen ? "pointer-events-auto" : "pointer-events-none"
@@ -161,6 +164,6 @@ export default function UserNav({ userName }: UserNavProps) {
           </div>
         </aside>
       </div>
-    </header>
+    </>
   );
 }
