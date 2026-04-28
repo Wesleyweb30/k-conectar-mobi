@@ -10,6 +10,14 @@ const FORM_TYPES: Record<number, string> = {
   443660: "Instalação Elétrica",
 };
 
+const CLOSED_STATUSES = new Set(["canceled", "cancelled", "done", "closed", "completed"]);
+
+function isOpenStatus(status?: string | null) {
+  const normalized = String(status ?? "").trim().toLowerCase();
+  if (!normalized) return false;
+  return !CLOSED_STATUSES.has(normalized);
+}
+
 export async function GET(request: Request) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) {
@@ -25,12 +33,19 @@ export async function GET(request: Request) {
 
   try {
     const response = await searchWorksByPed(ped);
-    const works = (response.results ?? []).filter(
+    const allWorks = (response.results ?? []).filter(
+      (w) => w.status !== "canceled",
+    );
+
+    const works = allWorks.filter(
       (w) => w.status !== "canceled" && w.updated_at,
     );
 
+    const hasAnyOs = allWorks.length > 0;
+    const hasOpenOs = allWorks.some((w) => isOpenStatus(w.status));
+
     if (works.length === 0) {
-      return NextResponse.json({ items: [] });
+      return NextResponse.json({ items: [], hasAnyOs, hasOpenOs });
     }
 
     const sorted = works.sort(
@@ -47,7 +62,7 @@ export async function GET(request: Request) {
       url: `${process.env.PRODUTTIVO_BASE_URL}/works/${work.id}`,
     }));
 
-    return NextResponse.json({ items });
+    return NextResponse.json({ items, hasAnyOs, hasOpenOs });
   } catch {
     return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
   }

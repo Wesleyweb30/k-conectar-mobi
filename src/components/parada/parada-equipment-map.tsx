@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 
 type EquipmentPoint = {
@@ -23,6 +23,21 @@ type Props = {
 type EquipmentSummaryItem = {
   type: string;
   count: number;
+};
+
+type OsFilter = "none" | "without-os" | "with-open-os";
+
+type ActivityApiItem = {
+  id: number;
+  tipo: string;
+  date: string;
+  url: string;
+};
+
+type ActivityApiResponse = {
+  items?: ActivityApiItem[];
+  hasAnyOs?: boolean;
+  hasOpenOs?: boolean;
 };
 
 const FORTALEZA_CENTER: [number, number] = [-3.7319, -38.5267];
@@ -55,18 +70,61 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-export default function ParadaEquipmentMap({
-  points,
-  heightClassName = "h-[600px]",
-}: Props) {
+export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px]" }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
+  const activityCacheRef = useRef(new Map<string, Promise<ActivityApiResponse>>());
+  const cancelOsLoadingRef = useRef(false);
+  const osLoadingRunRef = useRef(0);
+
+  const [osFilter, setOsFilter] = useState<OsFilter>("none");
+  const [isLoadingOsFilter, setIsLoadingOsFilter] = useState(false);
+  const [osLoadingProgress, setOsLoadingProgress] = useState({ processed: 0, total: 0 });
+  const [osFlagsByCodigo, setOsFlagsByCodigo] = useState<
+    Record<string, { hasAnyOs: boolean; hasOpenOs: boolean }>
+  >({});
+
+  const osLoadingPercent = useMemo(() => {
+    if (osLoadingProgress.total <= 0) return 0;
+    return Math.min(100, Math.round((osLoadingProgress.processed / osLoadingProgress.total) * 100));
+  }, [osLoadingProgress]);
+
+  const filteredPoints = useMemo(() => {
+    if (osFilter === "none") return points;
+
+    return points.filter((point) => {
+      const flags = osFlagsByCodigo[point.codigo];
+      if (!flags) return false;
+      if (osFilter === "without-os") return !flags.hasAnyOs;
+      return flags.hasOpenOs;
+    });
+  }, [osFilter, osFlagsByCodigo, points]);
+
+  const fetchActivity = useCallback((codigo: string): Promise<ActivityApiResponse> => {
+    const cached = activityCacheRef.current.get(codigo);
+    if (cached) return cached;
+
+    const promise = fetch(`/api/produttivo/parada-activity?ped=${encodeURIComponent(codigo)}`)
+      .then((res) => res.json() as Promise<ActivityApiResponse>)
+      .catch(() => ({ items: [], hasAnyOs: false, hasOpenOs: false }));
+
+    activityCacheRef.current.set(codigo, promise);
+    return promise;
+  }, []);
+
+  const stopOsFilterLoading = useCallback(() => {
+    cancelOsLoadingRef.current = true;
+    osLoadingRunRef.current += 1;
+    setIsLoadingOsFilter(false);
+    setOsLoadingProgress({ processed: 0, total: 0 });
+    setOsFilter("none");
+  }, []);
 
   const equipmentSummary = useMemo<EquipmentSummaryItem[]>(() => {
     const countByType = new Map<string, number>();
 
-    points.forEach((point) => {
+    filteredPoints.forEach((point) => {
       const type = normalizeEquipmentType(point);
       countByType.set(type, (countByType.get(type) ?? 0) + 1);
     });
@@ -74,7 +132,7 @@ export default function ParadaEquipmentMap({
     return Array.from(countByType.entries())
       .map(([type, count]) => ({ type, count }))
       .sort((a, b) => a.type.localeCompare(b.type, "pt-BR"));
-  }, [points]);
+  }, [filteredPoints]);
 
   const colorByType = useMemo(() => {
     const entries = equipmentSummary.map((summary, index) => [
@@ -110,6 +168,82 @@ export default function ParadaEquipmentMap({
   }, []);
 
   useEffect(() => {
+    if (osFilter === "none") {
+      cancelOsLoadingRef.current = false;
+      setIsLoadingOsFilter(false);
+      setOsLoadingProgress({ processed: 0, total: 0 });
+      return;
+    }
+
+    const missingCodes = points
+      .map((point) => point.codigo)
+      .filter((codigo) => !osFlagsByCodigo[codigo]);
+
+    if (missingCodes.length === 0) {
+      setIsLoadingOsFilter(false);
+      setOsLoadingProgress({ processed: 0, total: 0 });
+      return;
+    }
+
+    let active = true;
+    cancelOsLoadingRef.current = false;
+    const runId = osLoadingRunRef.current + 1;
+    osLoadingRunRef.current = runId;
+    setIsLoadingOsFilter(true);
+    setOsLoadingProgress({ processed: 0, total: missingCodes.length });
+
+    void (async () => {
+      const collected: Record<string, { hasAnyOs: boolean; hasOpenOs: boolean }> = {};
+      const chunkSize = 12;
+      let processed = 0;
+
+      try {
+        for (let i = 0; i < missingCodes.length; i += chunkSize) {
+          if (!active || cancelOsLoadingRef.current || runId !== osLoadingRunRef.current) {
+            break;
+          }
+
+          const chunk = missingCodes.slice(i, i + chunkSize);
+          const responses = await Promise.all(chunk.map((codigo) => fetchActivity(codigo)));
+
+          if (!active || cancelOsLoadingRef.current || runId !== osLoadingRunRef.current) {
+            break;
+          }
+
+          chunk.forEach((codigo, index) => {
+            const response = responses[index];
+            collected[codigo] = {
+              hasAnyOs: Boolean(response.hasAnyOs),
+              hasOpenOs: Boolean(response.hasOpenOs),
+            };
+          });
+
+          processed += chunk.length;
+          if (active) {
+            setOsLoadingProgress({ processed, total: missingCodes.length });
+          }
+        }
+
+        if (!active || cancelOsLoadingRef.current || runId !== osLoadingRunRef.current) return;
+        setOsFlagsByCodigo((prev) => ({ ...prev, ...collected }));
+      } finally {
+        if (active && runId === osLoadingRunRef.current) {
+          setIsLoadingOsFilter(false);
+          if (cancelOsLoadingRef.current) {
+            setOsLoadingProgress({ processed: 0, total: 0 });
+          } else {
+            setOsLoadingProgress({ processed: missingCodes.length, total: missingCodes.length });
+          }
+        }
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [fetchActivity, osFilter, osFlagsByCodigo, points]);
+
+  useEffect(() => {
     const map = mapRef.current;
     const layerGroup = layerRef.current;
 
@@ -117,14 +251,14 @@ export default function ParadaEquipmentMap({
 
     layerGroup.clearLayers();
 
-    if (points.length === 0) {
+    if (filteredPoints.length === 0) {
       map.setView(FORTALEZA_CENTER, 11);
       return;
     }
 
     const latLngs: L.LatLngExpression[] = [];
 
-    points.forEach((point) => {
+    filteredPoints.forEach((point) => {
       const type = normalizeEquipmentType(point);
       const color = colorByType.get(type) ?? "#2563eb";
 
@@ -161,25 +295,36 @@ export default function ParadaEquipmentMap({
       marker.on("popupopen", () => {
         if (fetched) return;
         fetched = true;
-        void fetch(`/api/produttivo/parada-activity?ped=${encodeURIComponent(point.codigo)}`)
-          .then((res) => res.json())
-          .then((data: {
-            items?: Array<{ id: number; tipo: string; date: string; url: string }>;
-          }) => {
-            const items = data.items ?? [];
 
-            const activityLine = items.length > 0
-              ? `<span style="color:#64748b">&#x1F4CB; &Uacute;ltimas OS:</span><br/>${items
-                .map(
-                  (item, index) =>
-                    `<div style="margin-top:${index === 0 ? "4" : "8"}px;">` +
-                    `<strong>${escapeHtml(item.tipo)}</strong><br/>` +
-                    `<span style="color:#64748b">Data:</span> ${escapeHtml(item.date)}<br/>` +
-                    `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">Abrir OS #${item.id}</a>` +
-                    `</div>`,
-                )
-                .join("")}`
-              : `<span style="color:#94a3b8">Sem atividade encontrada</span>`;
+        void fetchActivity(point.codigo)
+          .then((data: ActivityApiResponse) => {
+            setOsFlagsByCodigo((prev) => {
+              const current = prev[point.codigo];
+              if (current) return prev;
+              return {
+                ...prev,
+                [point.codigo]: {
+                  hasAnyOs: Boolean(data.hasAnyOs),
+                  hasOpenOs: Boolean(data.hasOpenOs),
+                },
+              };
+            });
+
+            const items = data.items ?? [];
+            const activityLine =
+              items.length > 0
+                ? `<span style="color:#64748b">&#x1F4CB; &Uacute;ltimas OS:</span><br/>${items
+                    .map(
+                      (item, index) =>
+                        `<div style="margin-top:${index === 0 ? "4" : "8"}px;">` +
+                        `<strong>${escapeHtml(item.tipo)}</strong><br/>` +
+                        `<span style="color:#64748b">Data:</span> ${escapeHtml(item.date)}<br/>` +
+                        `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">Abrir OS #${item.id}</a>` +
+                        `</div>`,
+                    )
+                    .join("")}`
+                : `<span style="color:#94a3b8">Sem atividade encontrada</span>`;
+
             marker.setPopupContent(makePopupContent(activityLine));
           })
           .catch(() => {
@@ -196,7 +341,7 @@ export default function ParadaEquipmentMap({
       padding: [36, 36],
       maxZoom: 16,
     });
-  }, [colorByType, points]);
+  }, [colorByType, fetchActivity, filteredPoints]);
 
   return (
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
@@ -209,8 +354,47 @@ export default function ParadaEquipmentMap({
         <div className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Legenda</div>
         <h3 className="mt-1 text-lg font-semibold text-slate-900">Tipo de equipamento</h3>
         <p className="mt-1 text-sm text-slate-600">
-          {equipmentSummary.length} tipos encontrados em {points.length} paradas georreferenciadas.
+          {equipmentSummary.length} tipos encontrados em {filteredPoints.length} paradas georreferenciadas.
         </p>
+
+        <div className="mt-4 space-y-1.5">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Filtro de OS</span>
+          <select
+            value={osFilter}
+            onChange={(event) => setOsFilter(event.target.value as OsFilter)}
+            className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm outline-none transition focus:border-teal-300 focus:ring-4 focus:ring-teal-100"
+          >
+            <option value="none">Nao aplicar filtro de OS</option>
+            <option value="without-os">Sem nenhuma OS</option>
+            <option value="with-open-os">Com OS aberta</option>
+          </select>
+          {osFilter !== "none" ? (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500">
+                {isLoadingOsFilter
+                  ? `Carregando status de OS... ${osLoadingPercent}% (${osLoadingProgress.processed}/${osLoadingProgress.total})`
+                  : `Filtro aplicado: ${filteredPoints.length} paradas encontradas.`}
+              </p>
+              {isLoadingOsFilter ? (
+                <button
+                  type="button"
+                  onClick={stopOsFilterLoading}
+                  className="h-8 rounded-lg border border-rose-200 bg-rose-50 px-3 text-xs font-semibold text-rose-700 transition hover:bg-rose-100"
+                >
+                  Interromper filtragem
+                </button>
+              ) : null}
+              {isLoadingOsFilter ? (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                  <div
+                    className="h-full rounded-full bg-teal-500 transition-all duration-200"
+                    style={{ width: `${osLoadingPercent}%` }}
+                  />
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
 
         <ul className="mt-4 max-h-[480px] space-y-2 overflow-auto pr-1">
           {equipmentSummary.map((item) => {
