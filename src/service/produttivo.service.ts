@@ -157,3 +157,9 @@ export function getProduttivoFormFills(params: {
     return produttivoGet<ProduttivoListResponse<ProduttivoManutencaoItem>>(endpoint);
 }
 
+/** Busca works pelo codigo PED (titulo ou numero) */
+export function searchWorksByPed(ped: string) {
+    return produttivoGet<ProduttivoListResponse<ProduttivoWork>>(
+        `works?q=${encodeURIComponent(ped)}&include_team_works=true&per_page=20`,
+    );
+}

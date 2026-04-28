@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import AdminNav from "@/components/admin/admin-nav";
 import UserNav from "@/components/user/user-nav";
-import ParadaEquipmentMap from "@/components/parada/parada-equipment-map";
+import ParadaEquipmentMap from "@/components/parada/parada-equipment-map-client";
 import ParadaFilters from "@/components/parada/parada-filters";
 
 type MapaPageProps = {
@@ -200,6 +200,7 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
               novaTipologia: novaTipologia ?? "",
             }}
             distinctValues={distinctValues}
+            includePageParam={false}
           />
 
           <p className="mt-3 text-xs text-slate-500">

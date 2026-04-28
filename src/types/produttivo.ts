@@ -16,6 +16,9 @@ export type ProduttivoWork = {
     id: number;
     title?: string | null;
     work_number?: number | string | null;
+    form_id?: number | null;
+    updated_at?: string | null;
+    status?: string | null;
 };
 
 export type ProduttivoManutencaoItem = {

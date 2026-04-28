@@ -142,14 +142,52 @@ export default function ParadaEquipmentMap({
         .filter((value): value is string => Boolean(value && value.trim()))
         .join(", ");
 
-      marker.bindPopup(
-        `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.4;max-width:260px;">
+      const makePopupContent = (activityLine: string) =>
+        `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.6;max-width:260px;">
           <strong>Parada ${escapeHtml(point.codigo)}</strong><br/>
           Tipo: ${escapeHtml(type)}<br/>
           ${endereco ? `Endereco: ${escapeHtml(endereco)}<br/>` : ""}
           Lat/Lng: ${point.latitude.toFixed(6)}, ${point.longitude.toFixed(6)}
-        </div>`,
+          <hr style="margin:5px 0;border-color:#e2e8f0"/>
+          ${activityLine}
+        </div>`;
+
+      marker.bindPopup(
+        makePopupContent('<span style="color:#94a3b8">&#9203; Carregando atividade...</span>'),
+        { minWidth: 210 },
       );
+
+      let fetched = false;
+      marker.on("popupopen", () => {
+        if (fetched) return;
+        fetched = true;
+        void fetch(`/api/produttivo/parada-activity?ped=${encodeURIComponent(point.codigo)}`)
+          .then((res) => res.json())
+          .then((data: {
+            items?: Array<{ id: number; tipo: string; date: string; url: string }>;
+          }) => {
+            const items = data.items ?? [];
+
+            const activityLine = items.length > 0
+              ? `<span style="color:#64748b">&#x1F4CB; &Uacute;ltimas OS:</span><br/>${items
+                .map(
+                  (item, index) =>
+                    `<div style="margin-top:${index === 0 ? "4" : "8"}px;">` +
+                    `<strong>${escapeHtml(item.tipo)}</strong><br/>` +
+                    `<span style="color:#64748b">Data:</span> ${escapeHtml(item.date)}<br/>` +
+                    `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">Abrir OS #${item.id}</a>` +
+                    `</div>`,
+                )
+                .join("")}`
+              : `<span style="color:#94a3b8">Sem atividade encontrada</span>`;
+            marker.setPopupContent(makePopupContent(activityLine));
+          })
+          .catch(() => {
+            marker.setPopupContent(
+              makePopupContent('<span style="color:#ef4444">Erro ao carregar</span>'),
+            );
+          });
+      });
 
       marker.addTo(layerGroup);
     });

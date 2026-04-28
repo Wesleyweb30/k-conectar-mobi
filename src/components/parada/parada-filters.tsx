@@ -23,6 +23,7 @@ type DistinctValues = {
 type Props = {
   initialFilters: FiltersState;
   distinctValues: DistinctValues;
+  includePageParam?: boolean;
 };
 
 function normalize(value: string) {
@@ -45,7 +46,11 @@ function buildQuery(filters: FiltersState) {
   return sp;
 }
 
-export default function ParadaFilters({ initialFilters, distinctValues }: Props) {
+export default function ParadaFilters({
+  initialFilters,
+  distinctValues,
+  includePageParam = true,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -109,13 +114,15 @@ export default function ParadaFilters({ initialFilters, distinctValues }: Props)
 
       if (currentFilterQuery !== nextFilterQuery) {
         const finalQuery = new URLSearchParams(nextFilterQuery);
-        finalQuery.set("page", "1");
+        if (includePageParam) {
+          finalQuery.set("page", "1");
+        }
         router.replace(`${pathname}?${finalQuery.toString()}`, { scroll: false });
       }
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [nextQuery, pathname, router, searchParams]);
+  }, [includePageParam, nextQuery, pathname, router, searchParams]);
 
   useEffect(() => {
     if (!isDrawerOpen) return;
