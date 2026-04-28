@@ -63,6 +63,12 @@ export default async function DashboardPage() {
               Consultar paradas
             </Link>
             <Link
+              href="/paradas/mapa"
+              className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100"
+            >
+              Abrir mapa geral de paradas
+            </Link>
+            <Link
               href="/paradas/rotas"
               className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800 transition hover:bg-emerald-100"
             >

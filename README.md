@@ -111,6 +111,7 @@ Detalhes da importação:
 - /login: autenticação.
 - /dashboard: área do usuário comum.
 - /paradas: consulta de paradas.
+- /paradas/mapa: mapa geral de paradas com legenda por tipo de equipamento.
 - /paradas/rotas: visualização no mapa.
 - /admin: home administrativa (hub operacional).
 - /admin/analytics: analytics de paradas.

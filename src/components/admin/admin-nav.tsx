@@ -133,6 +133,18 @@ export default function AdminNav({ userName }: AdminNavProps) {
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
                   Rotas
                 </Link>
+                <Link
+                  href="/paradas/mapa"
+                  onClick={() => setParqueOpen(false)}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
+                    pathname.startsWith("/paradas/mapa")
+                      ? "bg-cyan-50 text-cyan-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full bg-cyan-400" />
+                  Mapa
+                </Link>
               </div>
             )}
           </div>
@@ -281,6 +293,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
               { href: "/admin/analytics", label: "Analytics Paradas", color: "bg-violet-400" },
               { href: "/paradas", label: "Paradas", color: "bg-blue-400" },
               { href: "/paradas/rotas", label: "Rotas", color: "bg-emerald-400" },
+              { href: "/paradas/mapa", label: "Mapa", color: "bg-cyan-400" },
             ].map(({ href, label, color }) => (
               <Link
                 key={href}

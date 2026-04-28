@@ -65,6 +65,7 @@ export default function UserNav({ userName }: UserNavProps) {
         <div className="hidden items-center gap-2 md:flex md:gap-3">
           {navLink("/dashboard", "Início")}
           {navLink("/paradas", "Paradas")}
+          {navLink("/paradas/mapa", "Mapa")}
           {navLink("/paradas/rotas", "Rotas")}
           <span className="ml-1 rounded-full bg-slate-100 px-3 py-1.5 text-sm font-medium text-slate-600">
             {userName}
@@ -133,6 +134,7 @@ export default function UserNav({ userName }: UserNavProps) {
             {[
               { href: "/dashboard", label: "Início" },
               { href: "/paradas", label: "Paradas" },
+              { href: "/paradas/mapa", label: "Mapa" },
               { href: "/paradas/rotas", label: "Rotas" },
             ].map(({ href, label }) => {
               const isActive = pathname === href || (href === "/paradas" && pathname.startsWith("/paradas"));
