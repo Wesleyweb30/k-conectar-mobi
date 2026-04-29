@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import * as XLSX from "xlsx";
 import ParadaRouteMap from "@/components/parada/parada-route-map";
 import { ROUTE_SELECTION_TTL_MS, ROUTE_STORAGE_KEY } from "@/lib/session-policy";
+import { findParadasByCodigos } from "@/app/paradas/actions";
 
 type ParadaRow = {
   id: string;
@@ -66,6 +68,14 @@ type RouteSelectionState = {
 type GeolocationPositionErrorLike = {
   code?: number;
   message?: string;
+};
+
+type PedImportFeedback = {
+  fileName: string;
+  totalLidos: number;
+  selecionados: number;
+  ignoradosSemCoordenada: number;
+  naoEncontrados: string[];
 };
 
 function sanitizeRouteSelection(input: unknown): RouteSelectionItem[] {
@@ -335,6 +345,10 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isRequestingLocation, setIsRequestingLocation] = useState(false);
+  const [pedImportFeedback, setPedImportFeedback] = useState<PedImportFeedback | null>(null);
+  const [pedModalOpen, setPedModalOpen] = useState(false);
+  const [pedModalText, setPedModalText] = useState("");
+  const [isProcessingPeds, setIsProcessingPeds] = useState(false);
   const routeSelection = routeSelectionState.items;
 
   useEffect(() => {
@@ -552,6 +566,82 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
       type: "update",
       updater: (prev) => prev.filter((item) => item.id !== id),
     });
+  }
+
+  async function processPedText(text: string) {
+    const pedList = Array.from(
+      new Set(
+        text
+          .split(/[\n\r\u2028\u2029,;\t ]+/g)
+          .map((token) => token.trim())
+          .filter(Boolean),
+      ),
+    );
+
+    if (pedList.length === 0) return;
+
+    setIsProcessingPeds(true);
+
+    try {
+      const found = await findParadasByCodigos(pedList);
+
+      const foundByCodigo = new Map(
+        found.map((p) => [p.codigo.trim().toLowerCase(), p]),
+      );
+
+      const matchedWithCoordinates: RouteSelectionItem[] = [];
+      const naoEncontrados: string[] = [];
+      let ignoradosSemCoordenada = 0;
+
+      pedList.forEach((ped) => {
+        const p = foundByCodigo.get(ped.toLowerCase());
+
+        if (!p) {
+          naoEncontrados.push(ped);
+          return;
+        }
+
+        if (p.latitude === null || p.longitude === null) {
+          ignoradosSemCoordenada += 1;
+          return;
+        }
+
+        matchedWithCoordinates.push({
+          id: p.id,
+          codigo: p.codigo,
+          municipio: p.municipio,
+          bairro: p.bairro,
+          logradouro: p.logradouro,
+          quantidadeAbrigosTotens: p.quantidadeAbrigosTotens,
+          tipologiaAtual: p.tipologiaAtual,
+          novaTipologia: p.novaTipologia,
+          latitude: p.latitude,
+          longitude: p.longitude,
+        });
+      });
+
+      dispatchRouteSelection({
+        type: "update",
+        updater: (prev) => {
+          const existingIdSet = new Set(prev.map((item) => item.id));
+          const toAdd = matchedWithCoordinates.filter((item) => !existingIdSet.has(item.id));
+          return [...prev, ...toAdd];
+        },
+      });
+
+      setPedImportFeedback({
+        fileName: "colagem",
+        totalLidos: pedList.length,
+        selecionados: matchedWithCoordinates.length,
+        ignoradosSemCoordenada,
+        naoEncontrados,
+      });
+
+      setPedModalOpen(false);
+      setPedModalText("");
+    } finally {
+      setIsProcessingPeds(false);
+    }
   }
 
   function openInGoogleMaps() {
@@ -1023,6 +1113,13 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
               >
                 Exportar KML
               </button>
+              <button
+                type="button"
+                onClick={() => setPedModalOpen(true)}
+                className="col-span-2 h-11 rounded-xl border border-teal-300 bg-teal-50 px-3 text-sm font-medium text-teal-700 transition duration-200 hover:-translate-y-0.5 hover:bg-teal-100 md:col-span-1 md:h-9 md:rounded-lg"
+              >
+                Selecionar por PEDs
+              </button>
             </div>
           </div>
 
@@ -1041,6 +1138,16 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
             {locationError ? (
               <span className="rounded-full bg-rose-50 px-3 py-1 font-medium text-rose-700">
                 {locationError}
+              </span>
+            ) : null}
+            {pedImportFeedback ? (
+              <span className="rounded-full bg-teal-50 px-3 py-1 font-medium text-teal-700">
+                {pedImportFeedback.selecionados}/{pedImportFeedback.totalLidos} PED(s) selecionados
+              </span>
+            ) : null}
+            {pedImportFeedback && (pedImportFeedback.naoEncontrados.length > 0 || pedImportFeedback.ignoradosSemCoordenada > 0) ? (
+              <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700">
+                Nao encontrados: {pedImportFeedback.naoEncontrados.length} • sem coordenada: {pedImportFeedback.ignoradosSemCoordenada}
               </span>
             ) : null}
           </div>
@@ -1073,6 +1180,64 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
             heightClassName="h-[420px] md:h-[64vh]"
           />
         </div>
+      ) : null}
+
+      {pedModalOpen ? createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <button
+            type="button"
+            onClick={() => { setPedModalOpen(false); setPedModalText(""); }}
+            className="absolute inset-0 bg-black/40"
+            aria-label="Fechar"
+          />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-slate-900">Selecionar por PEDs</h3>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Cole os códigos PED abaixo, um por linha ou separados por vírgula/espaço.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => { setPedModalOpen(false); setPedModalText(""); }}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                aria-label="Fechar"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+
+            <textarea
+              value={pedModalText}
+              onChange={(e) => setPedModalText(e.target.value)}
+              placeholder={"140421\n150408\n150445\n150109\n150110"}
+              rows={10}
+              className="mt-3 w-full rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 font-mono text-sm text-slate-800 focus:border-teal-400 focus:outline-none focus:ring-2 focus:ring-teal-200"
+            />
+
+            <div className="mt-3 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => { setPedModalOpen(false); setPedModalText(""); }}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={pedModalText.trim().length === 0 || isProcessingPeds}
+                onClick={() => void processPedText(pedModalText)}
+                className="rounded-xl border border-teal-300 bg-teal-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isProcessingPeds ? "Buscando..." : "Selecionar paradas"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       ) : null}
 
       <div
