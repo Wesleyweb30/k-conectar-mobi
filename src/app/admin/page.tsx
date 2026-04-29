@@ -2,9 +2,91 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getAllProduttivoTickets,
+  getProduttivoTicketAppUrl,
+} from "@/service/produttivo.service";
+import type { ProduttivoTicket } from "@/types/produttivo";
 
 function formatNumber(value: number) {
   return value.toLocaleString("pt-BR");
+}
+
+type TicketPriorityKey =
+  | "urgent24"
+  | "immediate48"
+  | "preventive20"
+  | "maintenance30"
+  | "medium60"
+  | "low90"
+  | "all";
+
+function normalizeCategoryText(value?: string | null) {
+  return (value ?? "")
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function getPriorityFromCategory(category?: string | null): TicketPriorityKey {
+  const text = normalizeCategoryText(category);
+
+  if (text.includes("urg")) return "urgent24";
+  if (text.includes("corret") || text.includes("imediat")) return "immediate48";
+  if (text.includes("prevent")) return "preventive20";
+  if (text.includes("manut")) return "maintenance30";
+  if (text.includes("media")) return "medium60";
+  if (text.includes("baixa")) return "low90";
+
+  return "all";
+}
+
+function getPriorityDeadlineDays(priority: TicketPriorityKey) {
+  if (priority === "urgent24") return 1;
+  if (priority === "immediate48") return 2;
+  if (priority === "preventive20") return 20;
+  if (priority === "maintenance30") return 30;
+  if (priority === "medium60") return 60;
+  if (priority === "low90") return 90;
+  return null;
+}
+
+function getTicketAgeDays(value?: string | null) {
+  if (!value) return null;
+  const createdAt = new Date(value).getTime();
+  if (Number.isNaN(createdAt)) return null;
+  return (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
+}
+
+function getDeadlineStatus(createdAt?: string | null, priority?: TicketPriorityKey) {
+  if (!priority || priority === "all") return null;
+  const limitDays = getPriorityDeadlineDays(priority);
+  if (!limitDays) return null;
+
+  const ageDays = getTicketAgeDays(createdAt);
+  if (ageDays === null) return null;
+
+  const daysLeft = limitDays - ageDays;
+
+  if (daysLeft < 0) {
+    return {
+      state: "overdue" as const,
+      daysLeft: 0,
+      overdueDays: Math.floor(Math.abs(daysLeft)),
+    };
+  }
+
+  return {
+    state: "open" as const,
+    daysLeft: Math.ceil(daysLeft),
+    overdueDays: 0,
+  };
+}
+
+function getTicketHeadline(ticket: ProduttivoTicket) {
+  const number = ticket.ticket_number ? `#${ticket.ticket_number}` : `#${ticket.id}`;
+  const title = ticket.title?.trim() || "Sem título";
+  return `${number} - ${title}`;
 }
 
 export default async function AdminHomePage() {
@@ -17,6 +99,7 @@ export default async function AdminHomePage() {
     totalUsuarios,
     totalAdmins,
     ultimoUpdateParada,
+    pendingTickets,
   ] = await Promise.all([
     prisma.parada.count(),
     prisma.parada.count({
@@ -39,11 +122,47 @@ export default async function AdminHomePage() {
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
+    getAllProduttivoTickets(100, "pending").catch(() => []),
   ]);
 
   const paradasComCoordenada = Math.max(totalParadas - paradasSemCoordenada, 0);
   const coberturaMapaPercent =
     totalParadas > 0 ? ((paradasComCoordenada / totalParadas) * 100).toFixed(1) : "0.0";
+
+  const ticketWithStatus = pendingTickets
+    .map((ticket) => {
+      const priority = getPriorityFromCategory(ticket.ticket_category_name);
+      const deadline = getDeadlineStatus(ticket.created_at, priority);
+      return { ticket, priority, deadline };
+    })
+    .filter((item) => item.deadline !== null);
+
+  const overdueCount = ticketWithStatus.filter((item) => item.deadline?.state === "overdue").length;
+  const dueSoonCount = ticketWithStatus.filter(
+    (item) => item.deadline?.state === "open" && (item.deadline.daysLeft ?? 999) <= 3
+  ).length;
+  const urgentAndImmediateCount = pendingTickets.filter((ticket) => {
+    const priority = getPriorityFromCategory(ticket.ticket_category_name);
+    return priority === "urgent24" || priority === "immediate48";
+  }).length;
+
+  const criticalTickets = ticketWithStatus
+    .filter(
+      (item) =>
+        item.deadline?.state === "overdue" ||
+        (item.deadline?.state === "open" && (item.deadline.daysLeft ?? 999) <= 3)
+    )
+    .sort((a, b) => {
+      if (a.deadline?.state === "overdue" && b.deadline?.state !== "overdue") return -1;
+      if (a.deadline?.state !== "overdue" && b.deadline?.state === "overdue") return 1;
+
+      if (a.deadline?.state === "overdue" && b.deadline?.state === "overdue") {
+        return (b.deadline.overdueDays ?? 0) - (a.deadline.overdueDays ?? 0);
+      }
+
+      return (a.deadline?.daysLeft ?? 999) - (b.deadline?.daysLeft ?? 999);
+    })
+    .slice(0, 6);
 
   return (
     <div className="space-y-6">
@@ -119,6 +238,90 @@ export default async function AdminHomePage() {
           <p className="mt-1 text-xs text-sky-800">
             {formatNumber(totalAdmins)} administradores com acesso.
           </p>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-amber-50 p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Atenção da equipe: chamados</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Visão rápida para priorizar respostas e evitar estouro de prazo.
+            </p>
+          </div>
+
+          <Link
+            href="/admin/produttivo/chamados"
+            className="rounded-lg border border-rose-200 bg-white px-3 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50"
+          >
+            Abrir feed de chamados
+          </Link>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Pendentes</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{formatNumber(pendingTickets.length)}</p>
+            <p className="mt-1 text-xs text-slate-600">Chamados aguardando tratativa da equipe.</p>
+          </div>
+          <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-rose-700">Atrasados</p>
+            <p className="mt-1 text-2xl font-semibold text-rose-900">{formatNumber(overdueCount)}</p>
+            <p className="mt-1 text-xs text-rose-800">Prioridade máxima para retorno imediato.</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-amber-700">Vencem em até 3 dias</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-900">{formatNumber(dueSoonCount)}</p>
+            <p className="mt-1 text-xs text-amber-800">
+              {formatNumber(urgentAndImmediateCount)} em categorias Urgente/Imediato.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm font-semibold text-slate-900">Chamados críticos para ação</p>
+            <Link
+              href="/admin/produttivo/chamados?onlyOverdue=1"
+              className="text-xs font-semibold text-rose-700 hover:text-rose-800"
+            >
+              Ver somente atrasados
+            </Link>
+          </div>
+
+          {criticalTickets.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">Nenhum chamado crítico no momento.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {criticalTickets.map(({ ticket, deadline }) => {
+                const deadlineText =
+                  deadline?.state === "overdue"
+                    ? `Atrasado há ${deadline.overdueDays} dia(s)`
+                    : `Vence em ${deadline?.daysLeft ?? 0} dia(s)`;
+
+                return (
+                  <li key={ticket.id} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-900">{getTicketHeadline(ticket)}</p>
+                        <p className="text-xs text-slate-600">
+                          {ticket.ticket_category_name || "Sem categoria"} • {deadlineText}
+                        </p>
+                      </div>
+                      <a
+                        href={getProduttivoTicketAppUrl(ticket.id)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+                      >
+                        Abrir chamado
+                      </a>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </section>
 
