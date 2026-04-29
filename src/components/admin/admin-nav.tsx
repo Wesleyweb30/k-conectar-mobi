@@ -235,6 +235,18 @@ export default function AdminNav({ userName }: AdminNavProps) {
                   <span className="inline-block h-2 w-2 rounded-full bg-cyan-400" />
                   Radar Sem Manutenção
                 </Link>
+                <Link
+                  href="/admin/produttivo/chamados"
+                  onClick={() => setProduttivoOpen(false)}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
+                    pathname.startsWith("/admin/produttivo/chamados")
+                      ? "bg-rose-50 text-rose-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full bg-rose-400" />
+                  Chamados
+                </Link>
               </div>
             )}
           </div>
@@ -315,6 +327,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
               { href: "/admin/produttivo/implantacao", label: "Implantação", color: "bg-sky-400" },
               { href: "/admin/produttivo/instalacao-eletrica", label: "Instalação Elétrica", color: "bg-emerald-400" },
               { href: "/admin/produttivo/ligacao-paradas", label: "Radar Sem Manutenção", color: "bg-cyan-400" },
+              { href: "/admin/produttivo/chamados", label: "Chamados", color: "bg-rose-400" },
             ].map(({ href, label, color, exact }) => (
               <Link
                 key={href}

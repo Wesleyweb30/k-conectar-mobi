@@ -3,6 +3,7 @@ import type {
     ProduttivoInspectionFill,
     ProduttivoListResponse,
     ProduttivoManutencaoItem,
+    ProduttivoTicket,
     ProduttivoWork,
 } from "@/types/produttivo";
 
@@ -22,17 +23,21 @@ type ProduttivoQueryParams = {
 const INSPECAO_ENDPOINT =
     "form_fills?order_type=desc&form_fill%5Bproject_ids%5D%5B%5D=251329&actives=true&account_id=166569";
 
+export function getProduttivoAuthHeaders(): Record<string, string> {
+    return {
+        accept: "application/json",
+        "X-Auth-Login": process.env.PRODUTTIVO_LOGIN || "",
+        "X-Auth-Register": process.env.PRODUTTIVO_REGISTER || "",
+        "X-Auth-Token": process.env.PRODUTTIVO_TOKEN || "",
+    };
+}
+
 export async function produttivoGet<T>(endpoint: string): Promise<T> {
     const url = `${process.env.PRODUTTIVO_BASE_URL}/${endpoint}`;
 
     try {
         const res = await fetch(url, {
-            headers: {
-                accept: "application/json",
-                "X-Auth-Login": process.env.PRODUTTIVO_LOGIN || "",
-                "X-Auth-Register": process.env.PRODUTTIVO_REGISTER || "",
-                "X-Auth-Token": process.env.PRODUTTIVO_TOKEN || "",
-            },
+            headers: getProduttivoAuthHeaders(),
             next: { revalidate: 60 },
         });
 
@@ -162,4 +167,64 @@ export function searchWorksByPed(ped: string) {
     return produttivoGet<ProduttivoListResponse<ProduttivoWork>>(
         `works?q=${encodeURIComponent(ped)}&include_team_works=true&per_page=20`,
     );
+}
+
+export function getProduttivoTickets(params?: {
+    page?: number;
+    perPage?: number;
+    status?: string;
+}): Promise<ProduttivoListResponse<ProduttivoTicket>> {
+    const page = params?.page && params.page > 0 ? params.page : 1;
+    const perPage = params?.perPage && params.perPage > 0 ? params.perPage : 30;
+
+    let endpoint = `tickets?order_type=desc&page=${page}&per_page=${perPage}`;
+    if (params?.status) {
+        endpoint += `&statuses[]=${encodeURIComponent(params.status)}`;
+    }
+
+    return produttivoGet<ProduttivoListResponse<ProduttivoTicket>>(endpoint);
+}
+
+export async function getAllProduttivoTickets(perPage = 100, status?: string): Promise<ProduttivoTicket[]> {
+    const firstPage = await getProduttivoTickets({ page: 1, perPage, status });
+    const totalPages = firstPage.meta?.total_pages ?? 1;
+    const firstResults = firstPage.results ?? [];
+
+    if (totalPages <= 1) {
+        return firstResults;
+    }
+
+    const remainingPages = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, index) =>
+            getProduttivoTickets({ page: index + 2, perPage, status }).catch(() => ({ results: [] }))
+        )
+    );
+
+    return [
+        ...firstResults,
+        ...remainingPages.flatMap((page) => page.results ?? []),
+    ];
+}
+
+export function getProduttivoTicket(id: number): Promise<ProduttivoTicket> {
+    return produttivoGet<ProduttivoTicket>(`tickets/${id}`);
+}
+
+export function getProduttivoAppBaseUrl(): string {
+    return process.env.PRODUTTIVO_APP_URL || "https://app.produttivo.com.br";
+}
+
+export function getProduttivoTicketAppUrl(id: number): string {
+    return `${getProduttivoAppBaseUrl()}/tickets/${id}`;
+}
+
+export function getProduttivoAttachmentUrl(fileUrl?: string | null): string | null {
+    if (!fileUrl) return null;
+    if (/^https?:\/\//i.test(fileUrl)) return fileUrl;
+    return `${getProduttivoAppBaseUrl()}${fileUrl}`;
+}
+
+export function getProduttivoAttachmentProxyUrl(fileUrl?: string | null): string | null {
+    if (!fileUrl) return null;
+    return `/api/produttivo/attachment?fileUrl=${encodeURIComponent(fileUrl)}`;
 }
