@@ -25,6 +25,7 @@ type PageProps = {
   searchParams?: Promise<{
     page?: string;
     title?: string;
+    ped?: string;
     category?: string;
     onlyDuplicated?: string;
     onlyOverdue?: string;
@@ -32,6 +33,19 @@ type PageProps = {
     date?: string;
   }>;
 };
+
+function normalizePedInput(value?: string | null) {
+  if (!value) return "";
+  return value.replace(/\D/g, "").trim();
+}
+
+function ticketMatchesPed(ticket: { resource_place_name?: string | null; title?: string | null; description?: string | null }, ped: string) {
+  const sources = [ticket.resource_place_name, ticket.title, ticket.description];
+  return sources.some((source) => {
+    if (!source) return false;
+    return source.replace(/\D/g, "").includes(ped);
+  });
+}
 
 
 function formatCategoryWithDeadline(category?: string | null) {
@@ -99,6 +113,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
   const params = (await searchParams) ?? {};
   const requestedPage = params.page ? Math.max(1, parseInt(params.page, 10)) : 1;
   const selectedTitle = params.title?.trim() ?? "";
+  const selectedPed = normalizePedInput(params.ped);
   const selectedCategory = params.category ?? "";
   const onlyDuplicated = params.onlyDuplicated === "1";
   const onlyOverdue = params.onlyOverdue === "1";
@@ -127,6 +142,10 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
       const description = ticket.description?.toLocaleLowerCase("pt-BR") ?? "";
       return title.includes(normalizedTitle) || description.includes(normalizedTitle);
     });
+  }
+
+  if (selectedPed) {
+    filteredTickets = filteredTickets.filter((ticket) => ticketMatchesPed(ticket, selectedPed));
   }
 
   if (selectedCategory) {
@@ -207,13 +226,14 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
 
   const preserveParams: Record<string, string> = {};
   if (selectedTitle) preserveParams.title = selectedTitle;
+  if (selectedPed) preserveParams.ped = selectedPed;
   if (selectedCategory) preserveParams.category = selectedCategory;
   if (onlyDuplicated) preserveParams.onlyDuplicated = "1";
   if (onlyOverdue) preserveParams.onlyOverdue = "1";
   if (selectedParada) preserveParams.parada = selectedParada;
   if (selectedDate) preserveParams.date = selectedDate;
 
-  const activeFilterCount = [selectedTitle, selectedCategory, selectedParada, selectedDate, onlyDuplicated ? "1" : "", onlyOverdue ? "1" : ""]
+  const activeFilterCount = [selectedTitle, selectedPed, selectedCategory, selectedParada, selectedDate, onlyDuplicated ? "1" : "", onlyOverdue ? "1" : ""]
     .filter(Boolean)
     .length;
   const showCompactDuplicatedPanel = duplicatedParadas.length > 9;
@@ -270,6 +290,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                 <Link
                   href={buildHref(BASE_PATH, {
                     ...(selectedTitle ? { title: selectedTitle } : {}),
+                    ...(selectedPed ? { ped: selectedPed } : {}),
                     ...(selectedCategory ? { category: selectedCategory } : {}),
                     ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
                     ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
@@ -290,6 +311,18 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                   name="title"
                   defaultValue={selectedTitle}
                   placeholder="Ex.: sem equipamento"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-300"
+                />
+              </label>
+
+              <label className="space-y-1 text-sm text-slate-700">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">PED</span>
+                <input
+                  type="text"
+                  name="ped"
+                  defaultValue={selectedPed}
+                  inputMode="numeric"
+                  placeholder="Ex.: 110246"
                   className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-300"
                 />
               </label>
@@ -371,6 +404,11 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                     {formatCategoryWithDeadline(selectedCategory)}
                   </span>
                 )}
+                {selectedPed && (
+                  <span className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-800">
+                    PED: {selectedPed}
+                  </span>
+                )}
                 {selectedDate && (
                   <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-800">
                     {formatShortDate(selectedDate)}
@@ -410,6 +448,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                             key={cat}
                             href={buildHref(BASE_PATH, {
                               ...(selectedTitle ? { title: selectedTitle } : {}),
+                              ...(selectedPed ? { ped: selectedPed } : {}),
                               ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
                               ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
                               ...(selectedParada ? { parada: selectedParada } : {}),
@@ -467,6 +506,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                 key={parada}
                 href={buildHref(BASE_PATH, {
                   ...(selectedTitle ? { title: selectedTitle } : {}),
+                  ...(selectedPed ? { ped: selectedPed } : {}),
                   ...(selectedCategory ? { category: selectedCategory } : {}),
                   onlyDuplicated: "1",
                   ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
