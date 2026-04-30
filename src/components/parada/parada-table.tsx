@@ -6,7 +6,7 @@ import { useEffect, useMemo, useReducer, useState } from "react";
 import * as XLSX from "xlsx";
 import ParadaRouteMap from "@/components/parada/parada-route-map";
 import { ROUTE_SELECTION_TTL_MS, ROUTE_STORAGE_KEY } from "@/lib/session-policy";
-import { findParadasByCodigos } from "@/app/paradas/actions";
+import { findParadasByCodigos, findParadasByFilters } from "@/app/paradas/actions";
 
 type ParadaRow = {
   id: string;
@@ -30,6 +30,14 @@ type ParadaRow = {
 type Props = {
   paradas: ParadaRow[];
   routeMode?: boolean;
+  routeFilters?: {
+    codigo?: string;
+    status?: string;
+    municipio?: string;
+    bairro?: string;
+    logradouro?: string;
+    novaTipologia?: string;
+  };
   pagination?: {
     currentPage: number;
     totalPages: number;
@@ -43,14 +51,20 @@ type Props = {
 type RouteSelectionItem = {
   id: string;
   codigo: string;
+  status: string | null;
+  gestao: string | null;
+  classe: string | null;
   municipio: string | null;
   bairro: string | null;
   logradouro: string | null;
+  referencia: string | null;
+  sentido: string | null;
   quantidadeAbrigosTotens: number | null;
   tipologiaAtual: string | null;
   novaTipologia: string | null;
   latitude: number;
   longitude: number;
+  area: string | null;
 };
 
 type CurrentLocation = {
@@ -99,9 +113,14 @@ function sanitizeRouteSelection(input: unknown): RouteSelectionItem[] {
       return {
         id: routeItem.id as string,
         codigo: routeItem.codigo as string,
+        status: typeof routeItem.status === "string" ? routeItem.status : null,
+        gestao: typeof routeItem.gestao === "string" ? routeItem.gestao : null,
+        classe: typeof routeItem.classe === "string" ? routeItem.classe : null,
         municipio: typeof routeItem.municipio === "string" ? routeItem.municipio : null,
         bairro: typeof routeItem.bairro === "string" ? routeItem.bairro : null,
         logradouro: typeof routeItem.logradouro === "string" ? routeItem.logradouro : null,
+        referencia: typeof routeItem.referencia === "string" ? routeItem.referencia : null,
+        sentido: typeof routeItem.sentido === "string" ? routeItem.sentido : null,
         quantidadeAbrigosTotens:
           typeof routeItem.quantidadeAbrigosTotens === "number"
             ? routeItem.quantidadeAbrigosTotens
@@ -112,6 +131,7 @@ function sanitizeRouteSelection(input: unknown): RouteSelectionItem[] {
           typeof routeItem.novaTipologia === "string" ? routeItem.novaTipologia : null,
         latitude: routeItem.latitude as number,
         longitude: routeItem.longitude as number,
+        area: typeof routeItem.area === "string" ? routeItem.area : null,
       };
     });
 }
@@ -333,7 +353,12 @@ type ExportAllRow = {
   area: string;
 };
 
-export default function ParadaTable({ paradas, routeMode = false, pagination }: Props) {
+export default function ParadaTable({
+  paradas,
+  routeMode = false,
+  routeFilters,
+  pagination,
+}: Props) {
   const [initialRouteSelectionState] = useState<RouteSelectionState>(() =>
     routeMode ? readStoredSelectionState() : { items: [], expiresAt: null },
   );
@@ -349,6 +374,7 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   const [pedModalOpen, setPedModalOpen] = useState(false);
   const [pedModalText, setPedModalText] = useState("");
   const [isProcessingPeds, setIsProcessingPeds] = useState(false);
+  const [isSelectingAllFromFilters, setIsSelectingAllFromFilters] = useState(false);
   const routeSelection = routeSelectionState.items;
 
   useEffect(() => {
@@ -389,14 +415,6 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
   const selectedRouteIdSet = useMemo(
     () => new Set(routeSelection.map((item) => item.id)),
     [routeSelection],
-  );
-
-  const paradasWithCoordinates = useMemo(
-    () =>
-      paradas.filter(
-        (parada) => parada.latitude !== null && parada.longitude !== null,
-      ),
-    [paradas],
   );
 
   const routePoints = useMemo(
@@ -518,47 +536,72 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
           {
             id: parada.id,
             codigo: parada.codigo,
+            status: parada.status,
+            gestao: parada.gestao,
+            classe: parada.classe,
             municipio: parada.municipio,
             bairro: parada.bairro,
             logradouro: parada.logradouro,
+            referencia: parada.referencia,
+            sentido: parada.sentido,
             quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
             tipologiaAtual: parada.tipologiaAtual,
             novaTipologia: parada.novaTipologia,
             latitude,
             longitude,
+            area: parada.area,
           },
         ];
       },
     });
   }
 
-  function selectAllWithCoordinates() {
-    dispatchRouteSelection({
-      type: "update",
-      updater: (prev) => {
-        const idSet = new Set(prev.map((item) => item.id));
-        const next = [...prev];
+  async function selectAllFromFilters() {
+    if (isSelectingAllFromFilters) return;
 
-        paradasWithCoordinates.forEach((parada) => {
-          if (idSet.has(parada.id)) return;
+    setIsSelectingAllFromFilters(true);
 
-          next.push({
-            id: parada.id,
-            codigo: parada.codigo,
-            municipio: parada.municipio,
-            bairro: parada.bairro,
-            logradouro: parada.logradouro,
-            quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
-            tipologiaAtual: parada.tipologiaAtual,
-            novaTipologia: parada.novaTipologia,
-            latitude: parada.latitude as number,
-            longitude: parada.longitude as number,
+    try {
+      const filteredParadas = await findParadasByFilters(routeFilters);
+      const withCoordinates = filteredParadas.filter(
+        (parada) => parada.latitude !== null && parada.longitude !== null,
+      );
+
+      dispatchRouteSelection({
+        type: "update",
+        updater: (prev) => {
+          const idSet = new Set(prev.map((item) => item.id));
+          const next = [...prev];
+
+          withCoordinates.forEach((parada) => {
+            if (idSet.has(parada.id)) return;
+
+            next.push({
+              id: parada.id,
+              codigo: parada.codigo,
+              status: parada.status,
+              gestao: parada.gestao,
+              classe: parada.classe,
+              municipio: parada.municipio,
+              bairro: parada.bairro,
+              logradouro: parada.logradouro,
+              referencia: parada.referencia,
+              sentido: parada.sentido,
+              quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
+              tipologiaAtual: parada.tipologiaAtual,
+              novaTipologia: parada.novaTipologia,
+              latitude: parada.latitude as number,
+              longitude: parada.longitude as number,
+              area: parada.area,
+            });
           });
-        });
 
-        return next;
-      },
-    });
+          return next;
+        },
+      });
+    } finally {
+      setIsSelectingAllFromFilters(false);
+    }
   }
 
   function removeFromRoute(id: string) {
@@ -609,14 +652,20 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
         matchedWithCoordinates.push({
           id: p.id,
           codigo: p.codigo,
+          status: p.status,
+          gestao: p.gestao,
+          classe: p.classe,
           municipio: p.municipio,
           bairro: p.bairro,
           logradouro: p.logradouro,
+          referencia: p.referencia,
+          sentido: p.sentido,
           quantidadeAbrigosTotens: p.quantidadeAbrigosTotens,
           tipologiaAtual: p.tipologiaAtual,
           novaTipologia: p.novaTipologia,
           latitude: p.latitude,
           longitude: p.longitude,
+          area: p.area,
         });
       });
 
@@ -713,28 +762,27 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
 
     const exportRows: ExportAllRow[] = routePoints.map((point) => {
       const paradaAtual = paradaById.get(point.id);
-      const quantidadeAbrigosTotens =
-        point.quantidadeAbrigosTotens ?? paradaAtual?.quantidadeAbrigosTotens ?? null;
+      const quantidadeAbrigosTotens = point.quantidadeAbrigosTotens ?? paradaAtual?.quantidadeAbrigosTotens ?? null;
       const latitude = point.latitude ?? paradaAtual?.latitude ?? null;
       const longitude = point.longitude ?? paradaAtual?.longitude ?? null;
 
       return {
         id: point.id,
         codigo: point.codigo,
-        status: paradaAtual?.status ?? "",
-        gestao: paradaAtual?.gestao ?? "",
-        classe: paradaAtual?.classe ?? "",
+        status: point.status ?? paradaAtual?.status ?? "",
+        gestao: point.gestao ?? paradaAtual?.gestao ?? "",
+        classe: point.classe ?? paradaAtual?.classe ?? "",
         municipio: point.municipio ?? paradaAtual?.municipio ?? "",
         bairro: point.bairro ?? paradaAtual?.bairro ?? "",
         logradouro: point.logradouro ?? paradaAtual?.logradouro ?? "",
-        referencia: paradaAtual?.referencia ?? "",
-        sentido: paradaAtual?.sentido ?? "",
+        referencia: point.referencia ?? paradaAtual?.referencia ?? "",
+        sentido: point.sentido ?? paradaAtual?.sentido ?? "",
         "tipologia atual": point.tipologiaAtual ?? paradaAtual?.tipologiaAtual ?? "",
         quantidade: quantidadeAbrigosTotens === null ? "" : String(quantidadeAbrigosTotens),
         "nova tipologia": point.novaTipologia ?? paradaAtual?.novaTipologia ?? "",
         latitude: typeof latitude === "number" ? String(latitude) : "",
         longitude: typeof longitude === "number" ? String(longitude) : "",
-        area: paradaAtual?.area ?? "",
+        area: point.area ?? paradaAtual?.area ?? "",
       };
     });
 
@@ -1077,10 +1125,11 @@ export default function ParadaTable({ paradas, routeMode = false, pagination }: 
               </button>
               <button
                 type="button"
-                onClick={selectAllWithCoordinates}
+                onClick={selectAllFromFilters}
+                disabled={isSelectingAllFromFilters}
                 className="h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 md:h-9 md:rounded-lg"
               >
-                Selecionar página
+                {isSelectingAllFromFilters ? "Selecionando..." : "Selecionar todos do filtro"}
               </button>
               <button
                 type="button"

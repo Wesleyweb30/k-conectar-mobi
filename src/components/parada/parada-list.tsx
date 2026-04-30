@@ -208,6 +208,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
       <ParadaTable
         paradas={paradas}
         routeMode={routeMode}
+        routeFilters={routeMode ? activeParams : undefined}
         pagination={
           routeMode
             ? {
