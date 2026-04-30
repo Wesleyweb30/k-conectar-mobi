@@ -1,8 +1,12 @@
 ﻿"use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
-import type { ProduttivoManutencaoItem, ProduttivoFieldValue, ProduttivoAccountMember } from "@/types/produttivo";
+import type { ProduttivoManutencaoItem, ProduttivoFieldValue } from "@/types/produttivo";
+import { extractPedFromFieldValues } from "@/lib/ped-extraction";
+import { buildHref } from "@/lib/url-search-params";
+import { accentStyles, type AccentColor } from "@/lib/badge-styles";
 
 const PER_PAGE = 20;
 
@@ -15,7 +19,7 @@ type Props = {
   page: number;
   basePath: string;
   preserveParams?: Record<string, string>;
-  accentColor?: "amber" | "sky" | "emerald";
+  accentColor?: AccentColor;
   pedMap?: PedMap;
   idLabel?: string;
   preferFieldActivityId?: boolean;
@@ -23,15 +27,6 @@ type Props = {
   variant?: "default" | "feed";
   showImages?: boolean;
 };
-
-function buildPageUrl(
-  basePath: string,
-  page: number,
-  preserve: Record<string, string>
-): string {
-  const params = new URLSearchParams({ ...preserve, page: String(page) });
-  return `${basePath}?${params.toString()}`;
-}
 
 function formatDate(iso: string): string {
   const d = new Date(iso);
@@ -43,65 +38,6 @@ function formatDate(iso: string): string {
     minute: "2-digit",
   });
 }
-
-function extractPedFromFieldValues(item: ProduttivoManutencaoItem): string | null {
-  const atividade = item.field_values.find((fv) =>
-    fv.name?.toLowerCase().includes("atividade")
-  );
-  if (!atividade) return null;
-
-  const rawValue = Array.isArray(atividade.value)
-    ? atividade.value[0]
-    : atividade.value;
-  if (!rawValue) return null;
-
-  const text = String(rawValue).trim();
-  if (!text) return null;
-
-  const fromArrow = text.match(/>\s*([0-9]+)\s*$/);
-  if (fromArrow) return fromArrow[1];
-
-  if (/^[0-9]+$/.test(text)) return text;
-
-  if (!/[a-zA-Z]/.test(text) && /[0-9]/.test(text)) {
-    const digitsOnly = text.replace(/\D/g, "");
-    return digitsOnly || null;
-  }
-
-  return null;
-}
-
-const accentStyles = {
-  amber: {
-    badge: "border-amber-200 bg-amber-50 text-amber-700",
-    dot: "bg-amber-400",
-    feedGlow: "shadow-[0_24px_44px_-34px_rgba(245,158,11,0.45)]",
-    feedBorder: "before:from-amber-300 before:to-orange-300",
-    photoLabel: "bg-amber-900/75",
-    pagActive: "bg-amber-500 text-white border-amber-500",
-    pagHover: "hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700",
-  },
-  sky: {
-    badge: "border-sky-200 bg-sky-50 text-sky-700",
-    dot: "bg-sky-400",
-    feedGlow: "shadow-[0_24px_44px_-34px_rgba(14,165,233,0.45)]",
-    feedBorder: "before:from-sky-300 before:to-cyan-300",
-    photoLabel: "bg-sky-900/75",
-    pagActive: "bg-sky-500 text-white border-sky-500",
-    pagHover: "hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700",
-  },
-  emerald: {
-    badge: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    dot: "bg-emerald-400",
-    feedGlow: "shadow-[0_24px_44px_-34px_rgba(16,185,129,0.45)]",
-    feedBorder: "before:from-emerald-300 before:to-teal-300",
-    photoLabel: "bg-emerald-900/75",
-    pagActive: "bg-emerald-500 text-white border-emerald-500",
-    pagHover: "hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700",
-  },
-};
-
-const VISIBLE_FIELDS = 6;
 
 /** Campos prioritários — exibidos primeiro, na ordem definida */
 const PRIORITY_FIELDS: string[] = [
@@ -442,7 +378,7 @@ export default function ProduttivoFillList({
       ) : (
         filteredItems.map((item) => {
         const pedFromWork = item.work_id ? pedMap[item.work_id] ?? null : null;
-        const pedFromField = extractPedFromFieldValues(item);
+        const pedFromField = extractPedFromFieldValues(item.field_values);
         const ped = preferFieldActivityId
           ? pedFromField ?? pedFromWork
           : pedFromWork ?? pedFromField;
@@ -531,10 +467,12 @@ export default function ProduttivoFillList({
                               rel="noopener noreferrer"
                               className="group/photo relative block h-[22rem] overflow-hidden rounded-xl border border-slate-200 bg-slate-100"
                             >
-                              <img
+                              <Image
                                 src={proxyUrl}
                                 alt={`${entry.label} do registro ${item.id}`}
-                                loading="lazy"
+                                fill
+                                sizes="(max-width: 640px) 100vw, 50vw"
+                                unoptimized
                                 className="h-full w-full object-cover transition duration-500 group-hover/photo:scale-[1.04]"
                               />
                               <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-900/50 to-transparent" />
@@ -557,10 +495,12 @@ export default function ProduttivoFillList({
                               rel="noopener noreferrer"
                               className="relative block h-56 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 sm:h-64"
                             >
-                              <img
+                              <Image
                                 src={proxyUrl}
                                 alt={`Imagem ${index + 1} do registro ${item.id}`}
-                                loading="lazy"
+                                fill
+                                sizes="(max-width: 640px) 50vw, 25vw"
+                                unoptimized
                                 className="h-full w-full object-cover transition duration-300 hover:scale-[1.03]"
                               />
                             </a>
@@ -642,10 +582,12 @@ export default function ProduttivoFillList({
                       rel="noopener noreferrer"
                       className="group/sig shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white"
                     >
-                      <img
+                      <Image
                         src={toAttachmentProxyUrl(signatureImage)}
                         alt="Assinatura do executor"
-                        loading="lazy"
+                        width={112}
+                        height={56}
+                        unoptimized
                         className="h-14 w-28 object-contain transition duration-300 group-hover/sig:opacity-80"
                       />
                     </a>
@@ -711,7 +653,7 @@ export default function ProduttivoFillList({
           <div className="flex items-center gap-1.5">
             {page > 1 && (
               <Link
-                href={buildPageUrl(basePath, page - 1, preserveParams)}
+                href={buildHref(basePath, preserveParams, page - 1)}
                 className={`rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition ${styles.pagHover}`}
               >
                 Anterior
@@ -733,7 +675,7 @@ export default function ProduttivoFillList({
               return (
                 <Link
                   key={p}
-                  href={buildPageUrl(basePath, p, preserveParams)}
+                  href={buildHref(basePath, preserveParams, p)}
                   className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                     p === page
                       ? styles.pagActive
@@ -747,7 +689,7 @@ export default function ProduttivoFillList({
 
             {page < totalPages && (
               <Link
-                href={buildPageUrl(basePath, page + 1, preserveParams)}
+                href={buildHref(basePath, preserveParams, page + 1)}
                 className={`rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition ${styles.pagHover}`}
               >
                 Proxima

@@ -170,8 +170,10 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
   useEffect(() => {
     if (osFilter === "none") {
       cancelOsLoadingRef.current = false;
-      setIsLoadingOsFilter(false);
-      setOsLoadingProgress({ processed: 0, total: 0 });
+      queueMicrotask(() => {
+        setIsLoadingOsFilter(false);
+        setOsLoadingProgress({ processed: 0, total: 0 });
+      });
       return;
     }
 
@@ -180,8 +182,10 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
       .filter((codigo) => !osFlagsByCodigo[codigo]);
 
     if (missingCodes.length === 0) {
-      setIsLoadingOsFilter(false);
-      setOsLoadingProgress({ processed: 0, total: 0 });
+      queueMicrotask(() => {
+        setIsLoadingOsFilter(false);
+        setOsLoadingProgress({ processed: 0, total: 0 });
+      });
       return;
     }
 
@@ -189,8 +193,10 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
     cancelOsLoadingRef.current = false;
     const runId = osLoadingRunRef.current + 1;
     osLoadingRunRef.current = runId;
-    setIsLoadingOsFilter(true);
-    setOsLoadingProgress({ processed: 0, total: missingCodes.length });
+    queueMicrotask(() => {
+      setIsLoadingOsFilter(true);
+      setOsLoadingProgress({ processed: 0, total: missingCodes.length });
+    });
 
     void (async () => {
       const collected: Record<string, { hasAnyOs: boolean; hasOpenOs: boolean }> = {};

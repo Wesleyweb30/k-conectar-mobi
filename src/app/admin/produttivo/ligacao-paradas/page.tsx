@@ -1,13 +1,18 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import {
-  extractPedFromTitle,
   FORM_ID_MANUTENCAO,
   getProduttivoFormFills,
   getProduttivoWork,
 } from "@/service/produttivo.service";
+import {
+  extractPedFromTitle,
+  extractPedFromFieldValues,
+  normalizePed,
+} from "@/lib/ped-extraction";
+import { buildHref } from "@/lib/url-search-params";
 import GoToRoutesButton from "@/components/parada/go-to-routes-button";
-import type { ProduttivoFieldValue, ProduttivoManutencaoItem } from "@/types/produttivo";
+import type { ProduttivoManutencaoItem } from "@/types/produttivo";
 
 type PageProps = {
   searchParams?: Promise<{
@@ -60,23 +65,17 @@ type RiskInfo = {
 type MaintenanceFilter = "all" | "with" | "without";
 
 const PAGE_SIZE = 25;
+const BASE_PATH = "/admin/produttivo/ligacao-paradas";
 const PRODUTTIVO_PER_PAGE = 100;
 const ACTIVITY_SCAN_MAX_PAGES = 40;
 const WORK_BATCH_SIZE = 20;
 
-let workPedCache = new Map<number, string | null>();
-let latestActivityCache = new Map<string, string | null>();
+const workPedCache = new Map<number, string | null>();
+const latestActivityCache = new Map<string, string | null>();
 
 function normalizeInput(value?: string) {
   if (!value) return "";
   return value.trim();
-}
-
-function normalizePed(value?: string | null) {
-  if (!value) return null;
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return null;
-  return digits.replace(/^0+(?=\d)/, "");
 }
 
 function normalizeLegendas(value: string | string[] | undefined): RiskTone[] {
@@ -109,42 +108,6 @@ function matchesMaintenanceFilter(
   if (maintenanceFilter === "all") return true;
   const hasMaintenance = hasLatestMaintenance(iso);
   return maintenanceFilter === "with" ? hasMaintenance : !hasMaintenance;
-}
-
-function extractPedFromFieldValues(fieldValues: ProduttivoFieldValue[]): string | null {
-  const candidates = fieldValues
-    .filter((field) => field.name?.toLowerCase().includes("atividade"))
-    .map((field) => (Array.isArray(field.value) ? field.value[0] : field.value))
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0);
-
-  for (const candidate of candidates) {
-    const fromArrow = candidate.match(/>\s*(\d+)\s*$/);
-    if (fromArrow) return fromArrow[1];
-
-    if (/^\d+$/.test(candidate)) return candidate;
-
-    if (!/[a-zA-Z]/.test(candidate) && /\d/.test(candidate)) {
-      const digitsOnly = candidate.replace(/\D/g, "");
-      if (digitsOnly) return digitsOnly;
-    }
-  }
-
-  return null;
-}
-
-function buildHref(params: Record<string, string | string[]>, page: number) {
-  const sp = new URLSearchParams();
-  for (const [key, value] of Object.entries(params)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        if (item) sp.append(key, item);
-      }
-    } else if (value) {
-      sp.set(key, value);
-    }
-  }
-  sp.set("page", String(page));
-  return `/admin/produttivo/ligacao-paradas?${sp.toString()}`;
 }
 
 function formatDateTime(iso: string | null): string {
@@ -689,7 +652,7 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
           </span>
           <div className="flex items-center gap-2">
             <Link
-              href={buildHref(preserveParams, Math.max(1, safeCurrentPage - 1))}
+              href={buildHref(BASE_PATH, preserveParams, Math.max(1, safeCurrentPage - 1))}
               aria-disabled={safeCurrentPage <= 1}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                 safeCurrentPage > 1
@@ -700,7 +663,7 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
               Anterior
             </Link>
             <Link
-              href={buildHref(preserveParams, Math.min(totalPages, safeCurrentPage + 1))}
+              href={buildHref(BASE_PATH, preserveParams, Math.min(totalPages, safeCurrentPage + 1))}
               aria-disabled={safeCurrentPage >= totalPages}
               className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
                 safeCurrentPage < totalPages

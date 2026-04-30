@@ -2,6 +2,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import {
+  getParadaCoverageSummary,
+  getParadaDistinctValues,
+} from "@/lib/parada-query-cache";
 import AdminNav from "@/components/admin/admin-nav";
 import UserNav from "@/components/user/user-nav";
 import ParadaEquipmentMap from "@/components/parada/parada-equipment-map-client";
@@ -18,63 +22,12 @@ type MapaPageProps = {
   }>;
 };
 
+const MAP_POINTS_LIMIT = 5000;
+
 function normalizeParam(value?: string) {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-async function getDistinctValues() {
-  const [statusRows, municipioRows, bairroRows, logradouroRows, novaTipologiaRows] = await Promise.all([
-    prisma.parada.findMany({
-      distinct: ["status"],
-      where: { status: { not: null } },
-      select: { status: true },
-      orderBy: { status: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["municipio"],
-      where: { municipio: { not: null } },
-      select: { municipio: true },
-      orderBy: { municipio: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["bairro"],
-      where: { bairro: { not: null } },
-      select: { bairro: true },
-      orderBy: { bairro: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["logradouro"],
-      where: { logradouro: { not: null } },
-      select: { logradouro: true },
-      orderBy: { logradouro: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["novaTipologia"],
-      where: { novaTipologia: { not: null } },
-      select: { novaTipologia: true },
-      orderBy: { novaTipologia: "asc" },
-    }),
-  ]);
-
-  return {
-    status: statusRows
-      .map((item) => item.status)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    municipio: municipioRows
-      .map((item) => item.municipio)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    bairro: bairroRows
-      .map((item) => item.bairro)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    logradouro: logradouroRows
-      .map((item) => item.logradouro)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    novaTipologia: novaTipologiaRows
-      .map((item) => item.novaTipologia)
-      .filter((value): value is string => Boolean(value && value.trim())),
-  };
 }
 
 export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
@@ -126,15 +79,10 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
 
   const filteredWhere = { AND: andFilters };
 
-  const [distinctValues, totalParadas, paradasComCoordenada, points] = await Promise.all([
-    getDistinctValues(),
-    prisma.parada.count(),
-    prisma.parada.count({
-      where: {
-        latitude: { not: null },
-        longitude: { not: null },
-      },
-    }),
+  const [distinctValues, coverageSummary, totalFilteredPoints, points] = await Promise.all([
+    getParadaDistinctValues(),
+    getParadaCoverageSummary(),
+    prisma.parada.count({ where: filteredWhere }),
     prisma.parada.findMany({
       where: filteredWhere,
       select: {
@@ -149,13 +97,17 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
         longitude: true,
       },
       orderBy: [{ novaTipologia: "asc" }, { codigo: "asc" }],
+      take: MAP_POINTS_LIMIT,
     }),
   ]);
 
+  const { totalParadas, paradasComCoordenada } = coverageSummary;
+
   const coberturaBase = totalParadas > 0 ? ((paradasComCoordenada / totalParadas) * 100).toFixed(1) : "0.0";
   const coberturaFiltrada = paradasComCoordenada > 0
-    ? ((points.length / paradasComCoordenada) * 100).toFixed(1)
+    ? ((totalFilteredPoints / paradasComCoordenada) * 100).toFixed(1)
     : "0.0";
+  const isPointsTruncated = totalFilteredPoints > points.length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.12),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(34,197,94,0.1),_transparent_28%),linear-gradient(180deg,_#f8fafc,_#eef2f7)]">
@@ -182,7 +134,7 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-emerald-700">No filtro atual</p>
-              <p className="mt-1 text-2xl font-semibold text-emerald-900">{points.length}</p>
+              <p className="mt-1 text-2xl font-semibold text-emerald-900">{totalFilteredPoints}</p>
             </div>
             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3">
               <p className="text-xs uppercase tracking-wide text-cyan-700">Cobertura base</p>
@@ -204,7 +156,10 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
           />
 
           <p className="mt-3 text-xs text-slate-500">
-            {points.length} paradas no filtro atual, cobrindo {coberturaFiltrada}% das paradas georreferenciadas da base.
+            {totalFilteredPoints} paradas no filtro atual, cobrindo {coberturaFiltrada}% das paradas georreferenciadas da base.
+            {isPointsTruncated
+              ? ` Exibindo as primeiras ${points.length} no mapa para manter fluidez.`
+              : ""}
           </p>
         </section>
 

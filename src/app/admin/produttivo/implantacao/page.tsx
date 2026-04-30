@@ -221,13 +221,13 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
           {pedSearch && (
             <>
               {" · "}
-              <strong>PED: "{pedSearch}"</strong>
+              <strong>PED: &quot;{pedSearch}&quot;</strong>
             </>
           )}
           {executorSearch && (
             <>
               {" · "}
-              <strong>Executor: "{executorSearch}"</strong>
+              <strong>Executor: &quot;{executorSearch}&quot;</strong>
             </>
           )}
           {isSearching && (

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { buildSearchParams, normalizeTextParam } from "@/lib/url-search-params";
 
 type FiltersState = {
   codigo: string;
@@ -26,24 +27,17 @@ type Props = {
   includePageParam?: boolean;
 };
 
-function normalize(value: string) {
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : "";
-}
-
 function buildQuery(filters: FiltersState) {
-  const sp = new URLSearchParams();
+  const codigo = normalizeTextParam(filters.codigo);
 
-  const codigo = normalize(filters.codigo);
-  if (codigo) sp.set("codigo", codigo);
-
-  if (filters.status) sp.set("status", filters.status);
-  if (filters.municipio) sp.set("municipio", filters.municipio);
-  if (filters.bairro) sp.set("bairro", filters.bairro);
-  if (filters.logradouro) sp.set("logradouro", filters.logradouro);
-  if (filters.novaTipologia) sp.set("novaTipologia", filters.novaTipologia);
-
-  return sp;
+  return buildSearchParams({
+    ...(codigo ? { codigo } : {}),
+    ...(filters.status ? { status: filters.status } : {}),
+    ...(filters.municipio ? { municipio: filters.municipio } : {}),
+    ...(filters.bairro ? { bairro: filters.bairro } : {}),
+    ...(filters.logradouro ? { logradouro: filters.logradouro } : {}),
+    ...(filters.novaTipologia ? { novaTipologia: filters.novaTipologia } : {}),
+  });
 }
 
 export default function ParadaFilters({
@@ -67,7 +61,7 @@ export default function ParadaFilters({
   const activeFiltersCount = useMemo(
     () =>
       [
-        normalize(filters.codigo),
+        normalizeTextParam(filters.codigo),
         filters.status,
         filters.municipio,
         filters.bairro,
@@ -76,8 +70,9 @@ export default function ParadaFilters({
       ].filter(Boolean).length,
     [filters],
   );
+  const normalizedCodigo = normalizeTextParam(filters.codigo);
   const filterPills = [
-    normalize(filters.codigo) ? `Codigo: ${normalize(filters.codigo)}` : null,
+    normalizedCodigo ? `Codigo: ${normalizedCodigo}` : null,
     filters.status ? `Status: ${filters.status === "__EMPTY__" ? "Vazio" : filters.status}` : null,
     filters.municipio ? `Municipio: ${filters.municipio}` : null,
     filters.bairro ? `Bairro: ${filters.bairro}` : null,
@@ -99,10 +94,6 @@ export default function ParadaFilters({
   function toggleDrawerSection(section: keyof typeof drawerSections) {
     setDrawerSections((prev) => ({ ...prev, [section]: !prev[section] }));
   }
-
-  useEffect(() => {
-    setFilters(initialFilters);
-  }, [initialFilters]);
 
   useEffect(() => {
     const timeoutId = setTimeout(() => {

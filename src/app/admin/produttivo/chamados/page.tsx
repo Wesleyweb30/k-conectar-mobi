@@ -1,9 +1,22 @@
 import Link from "next/link";
+import Image from "next/image";
 import {
   getAllProduttivoTickets,
   getProduttivoAttachmentProxyUrl,
   getProduttivoTicketAppUrl,
 } from "@/service/produttivo.service";
+import { formatShortDate, normalizeDateKey } from "@/lib/date-formatting";
+import {
+  categoryBadgeClass,
+  getPriorityDeadlineDays,
+  getPriorityDeadlineLabel,
+  getPriorityFromCategory,
+  getTicketAgeDays,
+  statusBadge,
+  statusLabel,
+  type TicketPriorityKey as PriorityKey,
+} from "@/lib/ticket-priority";
+import { buildHref } from "@/lib/url-search-params";
 
 const BASE_PATH = "/admin/produttivo/chamados";
 const PER_PAGE = 12;
@@ -20,128 +33,6 @@ type PageProps = {
   }>;
 };
 
-function formatDate(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatShortDate(value?: string | null) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-
-  return date.toLocaleDateString("pt-BR");
-}
-
-function normalizeDateKey(value?: string | Date | null) {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function getLocalTodayKey() {
-  return normalizeDateKey(new Date()) ?? "";
-}
-
-type PriorityKey =
-  | "urgent24"
-  | "immediate48"
-  | "preventive20"
-  | "maintenance30"
-  | "medium60"
-  | "low90"
-  | "all";
-
-const PRIORITY_OPTIONS: Array<{ key: PriorityKey; label: string }> = [
-  { key: "urgent24", label: "Urgente (24h)" },
-  { key: "immediate48", label: "Imediato/Corretiva (48h)" },
-  { key: "preventive20", label: "Preventivo (20 Dias)" },
-  { key: "maintenance30", label: "Manutenção (30 dias)" },
-  { key: "medium60", label: "Prioridade Média (60 dias)" },
-  { key: "low90", label: "Prioridade Baixa (90 dias)" },
-  { key: "all", label: "Todas as prioridades" },
-];
-
-function normalizePriority(value?: string): PriorityKey {
-  const valid: PriorityKey[] = ["urgent24", "immediate48", "preventive20", "maintenance30", "medium60", "low90", "all"];
-  return valid.includes(value as PriorityKey) ? (value as PriorityKey) : "all";
-}
-
-function getTicketAgeDays(value?: string | null) {
-  if (!value) return null;
-  const createdAt = new Date(value).getTime();
-  if (Number.isNaN(createdAt)) return null;
-  const now = Date.now();
-  return (now - createdAt) / (1000 * 60 * 60 * 24);
-}
-
-function matchesPriority(ageDays: number | null, priority: PriorityKey) {
-  if (priority === "all") return true;
-  if (ageDays === null) return false;
-
-  if (priority === "urgent24") return ageDays <= 1;
-  if (priority === "immediate48") return ageDays > 1 && ageDays <= 2;
-  if (priority === "preventive20") return ageDays > 2 && ageDays <= 20;
-  if (priority === "maintenance30") return ageDays > 20 && ageDays <= 30;
-  if (priority === "medium60") return ageDays > 30 && ageDays <= 60;
-  if (priority === "low90") return ageDays > 60 && ageDays <= 90;
-
-  return true;
-}
-
-function getPriorityDeadlineDays(priority: PriorityKey) {
-  if (priority === "urgent24") return 1;
-  if (priority === "immediate48") return 2;
-  if (priority === "preventive20") return 20;
-  if (priority === "maintenance30") return 30;
-  if (priority === "medium60") return 60;
-  if (priority === "low90") return 90;
-  return null;
-}
-
-function getPriorityDeadlineLabel(priority: PriorityKey) {
-  if (priority === "urgent24") return "24h";
-  if (priority === "immediate48") return "48h";
-  if (priority === "preventive20") return "20 dias";
-  if (priority === "maintenance30") return "30 dias";
-  if (priority === "medium60") return "60 dias";
-  if (priority === "low90") return "90 dias";
-  return null;
-}
-
-function normalizeCategoryText(value?: string | null) {
-  return (value ?? "")
-    .toLocaleLowerCase("pt-BR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function getPriorityFromCategory(category?: string | null): PriorityKey {
-  const text = normalizeCategoryText(category);
-
-  if (text.includes("urg")) return "urgent24";
-  if (text.includes("corret") || text.includes("imediat")) return "immediate48";
-  if (text.includes("prevent")) return "preventive20";
-  if (text.includes("manut")) return "maintenance30";
-  if (text.includes("media")) return "medium60";
-  if (text.includes("baixa")) return "low90";
-
-  return "all";
-}
 
 function formatCategoryWithDeadline(category?: string | null) {
   const value = category?.trim() ?? "";
@@ -202,49 +93,6 @@ function getDeadlineStatus(createdAt?: string | null, priority?: PriorityKey) {
     badgeClass: "border-sky-200 bg-sky-50 text-sky-700",
     bannerClass: "border-sky-200 bg-sky-50 text-sky-700",
   };
-}
-
-function categoryBadgeClass(category?: string | null) {
-  const text = (category ?? "").toLocaleLowerCase("pt-BR");
-
-  if (text.includes("urg")) return "border-rose-200 bg-rose-50 text-rose-700";
-  if (text.includes("corret") || text.includes("imediat")) return "border-orange-200 bg-orange-50 text-orange-700";
-  if (text.includes("prevent")) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (text.includes("manut")) return "border-sky-200 bg-sky-50 text-sky-700";
-  if (text.includes("media")) return "border-amber-200 bg-amber-50 text-amber-700";
-  if (text.includes("baixa")) return "border-slate-200 bg-slate-100 text-slate-700";
-
-  return "border-violet-200 bg-violet-50 text-violet-700";
-}
-
-function statusBadge(status?: string | null) {
-  const normalized = (status ?? "").toLowerCase();
-
-  if (normalized === "pending") return "border-amber-200 bg-amber-50 text-amber-700";
-  if (normalized === "in_progress") return "border-sky-200 bg-sky-50 text-sky-700";
-  if (normalized === "done") return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (normalized === "denied") return "border-rose-200 bg-rose-50 text-rose-700";
-  return "border-slate-200 bg-slate-50 text-slate-700";
-}
-
-function statusLabel(status?: string | null) {
-  const normalized = (status ?? "").toLowerCase();
-
-  if (normalized === "pending") return "Pendente";
-  if (normalized === "in_progress") return "Em andamento";
-  if (normalized === "done") return "Concluido";
-  if (normalized === "denied") return "Negado";
-  return status || "Sem status";
-}
-
-function buildHref(params: Record<string, string>) {
-  const query = new URLSearchParams(params);
-  const result = query.toString();
-  return result ? `${BASE_PATH}?${result}` : BASE_PATH;
-}
-
-function buildPageHref(page: number, params: Record<string, string>) {
-  return buildHref({ ...params, page: String(page) });
 }
 
 export default async function ProduttivoChamadosPage({ searchParams }: PageProps) {
@@ -420,7 +268,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
               </div>
               {selectedParada && (
                 <Link
-                  href={buildHref({
+                  href={buildHref(BASE_PATH, {
                     ...(selectedTitle ? { title: selectedTitle } : {}),
                     ...(selectedCategory ? { category: selectedCategory } : {}),
                     ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
@@ -560,7 +408,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                         return (
                           <Link
                             key={cat}
-                            href={buildHref({
+                            href={buildHref(BASE_PATH, {
                               ...(selectedTitle ? { title: selectedTitle } : {}),
                               ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
                               ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
@@ -617,7 +465,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
             {duplicatedParadas.map((parada) => (
               <Link
                 key={parada}
-                href={buildHref({
+                href={buildHref(BASE_PATH, {
                   ...(selectedTitle ? { title: selectedTitle } : {}),
                   ...(selectedCategory ? { category: selectedCategory } : {}),
                   onlyDuplicated: "1",
@@ -732,11 +580,13 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                       <div className="relative min-h-[130px] sm:min-h-[170px]">
                         {imageHref ? (
                           <>
-                            <img
+                            <Image
                               src={imageHref}
                               alt={ticket.title || `Chamado ${ticket.id}`}
+                              fill
+                              sizes="(max-width: 768px) 100vw, 220px"
+                              unoptimized
                               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                              loading="lazy"
                             />
                             <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-slate-950/40 to-transparent" />
                           </>
@@ -806,11 +656,13 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                       <div className="relative min-h-[220px] sm:min-h-[280px]">
                         {imageHref ? (
                           <>
-                            <img
+                            <Image
                               src={imageHref}
                               alt={ticket.title || `Chamado ${ticket.id}`}
+                              fill
+                              sizes="(max-width: 768px) 100vw, 1200px"
+                              unoptimized
                               className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
-                              loading="lazy"
                             />
                             <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-slate-950/50 to-transparent" />
                           </>
@@ -894,7 +746,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
         </span>
         <div className="flex items-center gap-2">
           <Link
-            href={buildPageHref(Math.max(1, currentPage - 1), preserveParams)}
+            href={buildHref(BASE_PATH, preserveParams, Math.max(1, currentPage - 1))}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
               currentPage <= 1
                 ? "pointer-events-none border-slate-200 text-slate-400"
@@ -904,7 +756,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
             Anterior
           </Link>
           <Link
-            href={buildPageHref(Math.min(totalPages, currentPage + 1), preserveParams)}
+            href={buildHref(BASE_PATH, preserveParams, Math.min(totalPages, currentPage + 1))}
             className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
               currentPage >= totalPages
                 ? "pointer-events-none border-slate-200 text-slate-400"

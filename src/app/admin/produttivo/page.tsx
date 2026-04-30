@@ -8,6 +8,7 @@ import {
   getProduttivoFormFillCount,
 } from "@/service/produttivo.service";
 import ProduttivoFilters from "@/components/admin/produttivo-filters";
+import { getMonthRange, toApiDate } from "@/lib/date-formatting";
 
 type PageProps = {
   searchParams?: Promise<{
@@ -16,23 +17,6 @@ type PageProps = {
     userId?: string;
   }>;
 };
-
-/** Converte YYYY-MM-DD para DD/MM/YYYY (formato aceito pela API) */
-function toApiDate(dateStr: string): string {
-  const [y, m, d] = dateStr.split("-");
-  return `${d}/${m}/${y}`;
-}
-
-/** Retorna { start, end } no formato DD/MM/YYYY para um determinado mês */
-function getMonthRange(year: number, month: number): { start: string; end: string; label: string } {
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  const mm = String(month + 1).padStart(2, "0");
-  return {
-    start: `01/${mm}/${year}`,
-    end: `${lastDay}/${mm}/${year}`,
-    label: new Date(year, month, 1).toLocaleString("pt-BR", { month: "long", year: "numeric" }),
-  };
-}
 
 export default async function AdminProduttivoPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};

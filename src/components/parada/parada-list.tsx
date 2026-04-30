@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
+import { getParadaDistinctValues } from "@/lib/parada-query-cache";
+import { buildHref } from "@/lib/url-search-params";
 import ParadaFilters from "@/components/parada/parada-filters";
 import ParadaTable from "@/components/parada/parada-table";
 
@@ -24,73 +26,6 @@ function normalizeParam(value?: string) {
   if (!value) return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function buildHref(params: SearchParams, page: number) {
-  const sp = new URLSearchParams();
-
-  if (params.codigo) sp.set("codigo", params.codigo);
-  if (params.status) sp.set("status", params.status);
-  if (params.municipio) sp.set("municipio", params.municipio);
-  if (params.bairro) sp.set("bairro", params.bairro);
-  if (params.logradouro) sp.set("logradouro", params.logradouro);
-  if (params.novaTipologia) sp.set("novaTipologia", params.novaTipologia);
-  sp.set("page", String(page));
-
-  return `?${sp.toString()}`;
-}
-
-async function getDistinctValues() {
-  const [statusRows, municipioRows, bairroRows, logradouroRows, novaTipologiaRows] = await Promise.all([
-    prisma.parada.findMany({
-      distinct: ["status"],
-      where: { status: { not: null } },
-      select: { status: true },
-      orderBy: { status: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["municipio"],
-      where: { municipio: { not: null } },
-      select: { municipio: true },
-      orderBy: { municipio: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["bairro"],
-      where: { bairro: { not: null } },
-      select: { bairro: true },
-      orderBy: { bairro: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["logradouro"],
-      where: { logradouro: { not: null } },
-      select: { logradouro: true },
-      orderBy: { logradouro: "asc" },
-    }),
-    prisma.parada.findMany({
-      distinct: ["novaTipologia"],
-      where: { novaTipologia: { not: null } },
-      select: { novaTipologia: true },
-      orderBy: { novaTipologia: "asc" },
-    }),
-  ]);
-
-  return {
-    status: statusRows
-      .map((item) => item.status)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    municipio: municipioRows
-      .map((item) => item.municipio)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    bairro: bairroRows
-      .map((item) => item.bairro)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    logradouro: logradouroRows
-      .map((item) => item.logradouro)
-      .filter((value): value is string => Boolean(value && value.trim())),
-    novaTipologia: novaTipologiaRows
-      .map((item) => item.novaTipologia)
-      .filter((value): value is string => Boolean(value && value.trim())),
-  };
 }
 
 export default async function ParadaList({ searchParams, routeMode = false }: Props) {
@@ -138,7 +73,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
   const where = andFilters.length > 0 ? { AND: andFilters } : {};
 
   const [distinctValues, total, paradas] = await Promise.all([
-    getDistinctValues(),
+    getParadaDistinctValues(),
     prisma.parada.count({ where }),
     prisma.parada.findMany({
       where,
@@ -280,8 +215,8 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
                 totalPages,
                 hasPrev,
                 hasNext,
-                prevHref: buildHref(activeParams, Math.max(1, safeCurrentPage - 1)),
-                nextHref: buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1)),
+                prevHref: buildHref("", activeParams, Math.max(1, safeCurrentPage - 1)),
+                nextHref: buildHref("", activeParams, Math.min(totalPages, safeCurrentPage + 1)),
               }
             : undefined
         }
@@ -295,7 +230,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
 
           <div className="flex gap-2">
             <Link
-              href={buildHref(activeParams, Math.max(1, safeCurrentPage - 1))}
+              href={buildHref("", activeParams, Math.max(1, safeCurrentPage - 1))}
               aria-disabled={!hasPrev}
               className={`rounded-xl px-4 py-2.5 transition ${
                 hasPrev
@@ -306,7 +241,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
               Anterior
             </Link>
             <Link
-              href={buildHref(activeParams, Math.min(totalPages, safeCurrentPage + 1))}
+              href={buildHref("", activeParams, Math.min(totalPages, safeCurrentPage + 1))}
               aria-disabled={!hasNext}
               className={`rounded-xl px-4 py-2.5 transition ${
                 hasNext

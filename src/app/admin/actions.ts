@@ -5,9 +5,16 @@ import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 
 export async function createUserAction(formData: FormData) {
-  const name = formData.get("name") as string;
-  const email = formData.get("email") as string;
-  const password = formData.get("password") as string;
+  const requestHeaders = await headers();
+  const session = await auth.api.getSession({ headers: requestHeaders });
+
+  if (!session || session.user.role !== "admin") {
+    return { error: "Acesso não autorizado." };
+  }
+
+  const name = String(formData.get("name") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
   const roleRaw = formData.get("role") as string;
   const role: "admin" | "user" = roleRaw === "admin" ? "admin" : "user";
 
@@ -21,7 +28,7 @@ export async function createUserAction(formData: FormData) {
 
   try {
     await auth.api.createUser({
-      headers: await headers(),
+      headers: requestHeaders,
       body: { name, email, password, role },
     });
 

@@ -7,55 +7,15 @@ import {
   getProduttivoTicketAppUrl,
 } from "@/service/produttivo.service";
 import type { ProduttivoTicket } from "@/types/produttivo";
+import {
+  getPriorityDeadlineDays,
+  getPriorityFromCategory,
+  getTicketAgeDays,
+  type TicketPriorityKey,
+} from "@/lib/ticket-priority";
 
 function formatNumber(value: number) {
   return value.toLocaleString("pt-BR");
-}
-
-type TicketPriorityKey =
-  | "urgent24"
-  | "immediate48"
-  | "preventive20"
-  | "maintenance30"
-  | "medium60"
-  | "low90"
-  | "all";
-
-function normalizeCategoryText(value?: string | null) {
-  return (value ?? "")
-    .toLocaleLowerCase("pt-BR")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-}
-
-function getPriorityFromCategory(category?: string | null): TicketPriorityKey {
-  const text = normalizeCategoryText(category);
-
-  if (text.includes("urg")) return "urgent24";
-  if (text.includes("corret") || text.includes("imediat")) return "immediate48";
-  if (text.includes("prevent")) return "preventive20";
-  if (text.includes("manut")) return "maintenance30";
-  if (text.includes("media")) return "medium60";
-  if (text.includes("baixa")) return "low90";
-
-  return "all";
-}
-
-function getPriorityDeadlineDays(priority: TicketPriorityKey) {
-  if (priority === "urgent24") return 1;
-  if (priority === "immediate48") return 2;
-  if (priority === "preventive20") return 20;
-  if (priority === "maintenance30") return 30;
-  if (priority === "medium60") return 60;
-  if (priority === "low90") return 90;
-  return null;
-}
-
-function getTicketAgeDays(value?: string | null) {
-  if (!value) return null;
-  const createdAt = new Date(value).getTime();
-  if (Number.isNaN(createdAt)) return null;
-  return (Date.now() - createdAt) / (1000 * 60 * 60 * 24);
 }
 
 function getDeadlineStatus(createdAt?: string | null, priority?: TicketPriorityKey) {
