@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { ProduttivoManutencaoItem, ProduttivoFieldValue } from "@/types/produttivo";
+import type { ProduttivoManutencaoItem, ProduttivoFieldValue, ProduttivoAccountMember } from "@/types/produttivo";
 
 const PER_PAGE = 20;
 
@@ -369,6 +369,9 @@ export default function ProduttivoFillList({
   const totalPages = Math.ceil(total / PER_PAGE);
   const styles = accentStyles[accentColor];
 
+  const [missingSignature, setMissingSignature] = useState(false);
+  const [missingAdesivo, setMissingAdesivo] = useState(false);
+
   if (items.length === 0) {
     return (
       <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
@@ -377,9 +380,67 @@ export default function ProduttivoFillList({
     );
   }
 
+  const filteredItems = items.filter((item) => {
+    if (missingSignature && getSignatureUrl(item.field_values) !== null) return false;
+    if (missingAdesivo && getAdesivoStatus(item.field_values) === "conforme") return false;
+    return true;
+  });
+
   return (
     <div className="space-y-3">
-      {items.map((item) => {
+      {variant === "feed" && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Filtros rápidos</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setMissingSignature((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                missingSignature
+                  ? "border-rose-400 bg-rose-50 text-rose-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${missingSignature ? "bg-rose-500" : "bg-slate-300"}`} />
+              Falta assinatura
+            </button>
+            <button
+              onClick={() => setMissingAdesivo((v) => !v)}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                missingAdesivo
+                  ? "border-amber-400 bg-amber-50 text-amber-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${missingAdesivo ? "bg-amber-500" : "bg-slate-300"}`} />
+              Adesivo irregular
+            </button>
+            {(missingSignature || missingAdesivo) && (
+              <button
+                onClick={() => {
+                  setMissingSignature(false);
+                  setMissingAdesivo(false);
+                }}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
+              >
+                Limpar
+              </button>
+            )}
+          </div>
+
+          {filteredItems.length !== items.length && (
+            <p className="mt-2 text-xs text-slate-500">
+              Mostrando <strong>{filteredItems.length}</strong> de <strong>{items.length}</strong> registros nesta página
+            </p>
+          )}
+        </div>
+      )}
+
+      {filteredItems.length === 0 && items.length > 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+          Nenhum registro corresponde aos filtros aplicados.
+        </div>
+      ) : (
+        filteredItems.map((item) => {
         const pedFromWork = item.work_id ? pedMap[item.work_id] ?? null : null;
         const pedFromField = extractPedFromFieldValues(item);
         const ped = preferFieldActivityId
@@ -639,7 +700,7 @@ export default function ProduttivoFillList({
             )}
           </div>
         );
-      })}
+      }))}
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">

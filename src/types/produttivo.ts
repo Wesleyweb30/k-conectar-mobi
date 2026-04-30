@@ -41,6 +41,7 @@ export type ProduttivoManutencaoItem = {
     document_number?: number | string | null;
     created_at: string;
     work_id?: number | null;
+    user_id?: number | null;
     field_values: ProduttivoFieldValue[];
 };
 

@@ -19,6 +19,8 @@ type PageProps = {
     endDate?: string;
     userId?: string;
     page?: string;
+    pedSearch?: string;
+    executorSearch?: string;
   }>;
 };
 
@@ -50,6 +52,9 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   const rawEnd = params.endDate ?? "";
   const userId = params.userId ? parseInt(params.userId, 10) : undefined;
   const page = params.page ? Math.max(1, parseInt(params.page, 10)) : 1;
+  const pedSearch = params.pedSearch ?? "";
+  const executorSearch = params.executorSearch ?? "";
+  const isSearching = !!(pedSearch || executorSearch);
 
   const apiStart = rawStart ? toApiDate(rawStart) : undefined;
   const apiEnd = rawEnd ? toApiDate(rawEnd) : undefined;
@@ -63,8 +68,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
       startDate: apiStart,
       endDate: apiEnd,
       userId,
-      page,
-      perPage: PER_PAGE,
+      page: isSearching ? 1 : page,
+      perPage: isSearching ? 200 : PER_PAGE,
     }),
     getProduttivoAccountMembers().catch(() => ({ results: [] })),
     ...monthRanges.map((m) =>
@@ -77,11 +82,35 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
     ),
   ]);
 
-  const items = response.results ?? [];
+  let items = response.results ?? [];
   const total = response.meta?.count ?? 0;
   const members = membersResponse.results ?? [];
 
   const pedMap = await getPedMapForItems(items);
+
+  // Filtragem server-side para buscas globais (opera sobre todos os registros buscados)
+  if (pedSearch) {
+    const q = pedSearch.toLowerCase();
+    items = items.filter((item) => {
+      if (String(item.document_number ?? "").toLowerCase().includes(q)) return true;
+      if (item.work_id && (pedMap[item.work_id] ?? "").toLowerCase().includes(q)) return true;
+      const atividade = item.field_values.find((fv) => fv.name?.toLowerCase().includes("atividade"));
+      const raw = Array.isArray(atividade?.value) ? atividade.value[0] : atividade?.value;
+      if (String(raw ?? "").toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }
+
+  if (executorSearch) {
+    const q = executorSearch.toLowerCase();
+    items = items.filter((item) => {
+      const executorField = item.field_values.find((fv) => fv.name?.toLowerCase().includes("executor"));
+      const raw = Array.isArray(executorField?.value) ? executorField.value[0] : executorField?.value;
+      return String(raw ?? "").toLowerCase().includes(q);
+    });
+  }
+
+  const displayTotal = isSearching ? items.length : total;
 
   const monthData = monthRanges.map((m, i) => ({
     label: m.label,
@@ -94,6 +123,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   if (rawStart) preserveParams.startDate = rawStart;
   if (rawEnd) preserveParams.endDate = rawEnd;
   if (params.userId) preserveParams.userId = params.userId;
+  if (pedSearch) preserveParams.pedSearch = pedSearch;
+  if (executorSearch) preserveParams.executorSearch = executorSearch;
 
   return (
     <div className="space-y-6">
@@ -171,11 +202,11 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
 
       {/* Filtros */}
       <Suspense>
-        <ProduttivoListFilters basePath={BASE_PATH} members={members} />
+        <ProduttivoListFilters basePath={BASE_PATH} members={members} showSearchFields />
       </Suspense>
 
       {/* Aviso de filtro ativo */}
-      {(rawStart || rawEnd || userId) && (
+      {(rawStart || rawEnd || userId || pedSearch || executorSearch) && (
         <div className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-2 text-sm text-sky-700">
           Filtrando por:{" "}
           {rawStart && rawEnd && (
@@ -187,14 +218,31 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
               <strong>Técnico #{userId}</strong>
             </>
           )}
+          {pedSearch && (
+            <>
+              {" · "}
+              <strong>PED: "{pedSearch}"</strong>
+            </>
+          )}
+          {executorSearch && (
+            <>
+              {" · "}
+              <strong>Executor: "{executorSearch}"</strong>
+            </>
+          )}
+          {isSearching && (
+            <span className="ml-2 rounded-full bg-sky-200 px-2 py-0.5 text-[11px] font-semibold">
+              {items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
       )}
 
       {/* Lista */}
       <ProduttivoFillList
         items={items}
-        total={total}
-        page={page}
+        total={displayTotal}
+        page={isSearching ? 1 : page}
         basePath={BASE_PATH}
         preserveParams={preserveParams}
         accentColor="sky"
