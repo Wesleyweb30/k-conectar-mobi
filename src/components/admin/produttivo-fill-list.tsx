@@ -120,6 +120,7 @@ const PRIORITY_FIELDS: string[] = [
 const HIDDEN_DETAIL_FIELD_NAMES = [
   "FOTO DO EQUIPAMENTO - (ANTERIOR)",
   "FOTO DO EQUIPAMENTO - (POSTERIOR)",
+  "ASSINATURA EXECUTOR",
 ];
 
 function isLikelyImageUrl(url: string): boolean {
@@ -182,6 +183,47 @@ function getNamedPhotoUrl(
     ? photoField.value
     : photoField.value
       ? [photoField.value]
+      : [];
+  for (const value of values) {
+    const candidates = extractImageCandidates(String(value));
+    if (candidates.length > 0) return candidates[0];
+  }
+
+  return null;
+}
+
+function getAdesivoStatus(fieldValues: ProduttivoFieldValue[]): "conforme" | "nao_conforme" | "vazio" | null {
+  const field = fieldValues.find((fv) => {
+    const name = fv.name?.toLowerCase() ?? "";
+    return name.includes("adesivo");
+  });
+  if (!field) return null;
+  const raw = Array.isArray(field.value) ? field.value[0] : field.value;
+  if (!raw || String(raw).trim() === "") return "vazio";
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized.includes("não conforme") || normalized.includes("nao conforme")) return "nao_conforme";
+  if (normalized.includes("conforme")) return "conforme";
+  return "vazio";
+}
+
+function getSignatureUrl(fieldValues: ProduttivoFieldValue[]): string | null {
+  const signatureField = fieldValues.find((fieldValue) => {
+    const fieldName = fieldValue.name?.toLowerCase() ?? "";
+    return fieldName.includes("assinatura");
+  });
+
+  if (!signatureField) return null;
+
+  const fromAttachmentUrl = pickAttachmentUrl(signatureField.attachment_url);
+  if (fromAttachmentUrl && isLikelyImageUrl(fromAttachmentUrl)) return fromAttachmentUrl;
+
+  const fromActiveAttachment = getLatestActiveAttachmentUrl(signatureField);
+  if (fromActiveAttachment && isLikelyImageUrl(fromActiveAttachment)) return fromActiveAttachment;
+
+  const values = Array.isArray(signatureField.value)
+    ? signatureField.value
+    : signatureField.value
+      ? [signatureField.value]
       : [];
   for (const value of values) {
     const candidates = extractImageCandidates(String(value));
@@ -282,19 +324,14 @@ function shouldHideDetailField(name?: string | null): boolean {
 }
 
 function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
-  const [expanded, setExpanded] = useState(false);
-
   const sorted = [...fieldValues.filter((fv) => fv.name && !shouldHideDetailField(fv.name))].sort(
     (a, b) => priorityIndex(a.name) - priorityIndex(b.name)
   );
 
-  const visible = expanded ? sorted : sorted.slice(0, VISIBLE_FIELDS);
-  const hiddenCount = sorted.length - VISIBLE_FIELDS;
-
   return (
     <div className="mt-3">
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
-        {visible.map((fv, idx) => {
+        {sorted.map((fv, idx) => {
           const displayValue = Array.isArray(fv.value)
             ? fv.value.join(", ")
             : (fv.value ?? "---");
@@ -310,15 +347,6 @@ function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
           );
         })}
       </dl>
-
-      {hiddenCount > 0 && (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="mt-3 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
-        >
-          {expanded ? "▲ Mostrar menos" : `▼ Ver mais ${hiddenCount} campo${hiddenCount !== 1 ? "s" : ""}`}
-        </button>
-      )}
     </div>
   );
 }
@@ -370,6 +398,8 @@ export default function ProduttivoFillList({
 
         const anteriorImage = showImages ? getNamedPhotoUrl(item.field_values, "anterior") : null;
         const posteriorImage = showImages ? getNamedPhotoUrl(item.field_values, "posterior") : null;
+        const signatureImage = showImages ? getSignatureUrl(item.field_values) : null;
+        const adesivoStatus = getAdesivoStatus(item.field_values);
         const keyPhotosCount = Number(Boolean(anteriorImage)) + Number(Boolean(posteriorImage));
 
         if (variant === "feed") {
@@ -486,6 +516,93 @@ export default function ProduttivoFillList({
 
                 {item.field_values.length > 0 && (
                   <FieldList fieldValues={item.field_values} />
+                )}
+
+                {adesivoStatus !== null && (
+                  <div
+                    className={`mt-4 flex items-center gap-2.5 rounded-xl border px-3 py-2.5 ${
+                      adesivoStatus === "conforme"
+                        ? "border-emerald-200 bg-emerald-50"
+                        : adesivoStatus === "nao_conforme"
+                          ? "border-rose-200 bg-rose-50"
+                          : "border-amber-200 bg-amber-50"
+                    }`}
+                  >
+                    {adesivoStatus === "conforme" ? (
+                      <svg className="h-4 w-4 shrink-0 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : adesivoStatus === "nao_conforme" ? (
+                      <svg className="h-4 w-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    ) : (
+                      <svg className="h-4 w-4 shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                      </svg>
+                    )}
+                    <div>
+                      <p
+                        className={`text-[11px] font-semibold uppercase tracking-wide ${
+                          adesivoStatus === "conforme"
+                            ? "text-emerald-700"
+                            : adesivoStatus === "nao_conforme"
+                              ? "text-rose-600"
+                              : "text-amber-700"
+                        }`}
+                      >
+                        Adesivo —{" "}
+                        {adesivoStatus === "conforme"
+                          ? "Conforme"
+                          : adesivoStatus === "nao_conforme"
+                            ? "Não conforme"
+                            : "Não informado"}
+                      </p>
+                      {adesivoStatus !== "conforme" && (
+                        <p
+                          className={`mt-0.5 text-xs ${
+                            adesivoStatus === "nao_conforme" ? "text-rose-500" : "text-amber-600"
+                          }`}
+                        >
+                          {adesivoStatus === "nao_conforme"
+                            ? "Adesivo fora do padrão. Verifique e corrija no Produttivo."
+                            : "Campo de adesivo não foi preenchido. Verifique e corrija no Produttivo."}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {signatureImage ? (
+                  <div className="mt-4 flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <a
+                      href={toAttachmentProxyUrl(signatureImage)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="group/sig shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white"
+                    >
+                      <img
+                        src={toAttachmentProxyUrl(signatureImage)}
+                        alt="Assinatura do executor"
+                        loading="lazy"
+                        className="h-14 w-28 object-contain transition duration-300 group-hover/sig:opacity-80"
+                      />
+                    </a>
+                    <div className="flex flex-col justify-center">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Assinatura executor</p>
+                      <p className="mt-0.5 text-xs text-slate-500">Toque para ampliar</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-4 flex items-center gap-2.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5">
+                    <svg className="h-4 w-4 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-rose-600">Assinatura ausente</p>
+                      <p className="mt-0.5 text-xs text-rose-500">Este registro não possui assinatura do executor. Verifique e corrija no Produttivo.</p>
+                    </div>
+                  </div>
                 )}
               </div>
             </article>
