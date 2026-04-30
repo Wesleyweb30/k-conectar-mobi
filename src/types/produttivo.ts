@@ -1,6 +1,17 @@
 export type ProduttivoFieldValue = {
     name?: string | null;
     value?: string | string[] | null;
+    attachment_content_type?: string | null;
+    attachment_url?:
+        | string
+        | {
+            original?: string | null;
+            medium?: string | null;
+            thumb?: string | null;
+            mini?: string | null;
+        }
+        | null;
+    attachments?: ProduttivoTicketAttachment[];
 };
 
 export type ProduttivoMeta = {

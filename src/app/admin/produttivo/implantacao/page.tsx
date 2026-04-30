@@ -202,6 +202,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
         idLabel="PED"
         preferFieldActivityId
         useLabelOnFallback
+        variant="feed"
+        showImages
       />
     </div>
   );
