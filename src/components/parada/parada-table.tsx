@@ -79,6 +79,12 @@ type RouteSelectionState = {
   expiresAt: number | null;
 };
 
+type StoredRouteSelectionSnapshot = {
+  items: RouteSelectionItem[];
+  expiresAt: number | null;
+  pendingCodigos: string[];
+};
+
 type GeolocationPositionErrorLike = {
   code?: number;
   message?: string;
@@ -143,37 +149,53 @@ function buildRouteSelectionState(items: RouteSelectionItem[]): RouteSelectionSt
   };
 }
 
-function readStoredSelectionState(): RouteSelectionState {
-  if (typeof window === "undefined") return { items: [], expiresAt: null };
+function sanitizeCodigos(input: unknown) {
+  if (!Array.isArray(input)) return [];
+
+  return Array.from(
+    new Set(
+      input
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function readStoredSelectionState(): StoredRouteSelectionSnapshot {
+  if (typeof window === "undefined") {
+    return { items: [], expiresAt: null, pendingCodigos: [] };
+  }
 
   const raw = window.localStorage.getItem(ROUTE_STORAGE_KEY);
-  if (!raw) return { items: [], expiresAt: null };
+  if (!raw) return { items: [], expiresAt: null, pendingCodigos: [] };
 
   try {
     const parsed = JSON.parse(raw);
 
     if (Array.isArray(parsed)) {
       window.localStorage.removeItem(ROUTE_STORAGE_KEY);
-      return { items: [], expiresAt: null };
+      return { items: [], expiresAt: null, pendingCodigos: [] };
     }
 
     if (!parsed || typeof parsed !== "object") {
       window.localStorage.removeItem(ROUTE_STORAGE_KEY);
-      return { items: [], expiresAt: null };
+      return { items: [], expiresAt: null, pendingCodigos: [] };
     }
 
     const expiresAt = typeof parsed.expiresAt === "number" ? parsed.expiresAt : null;
     const items = sanitizeRouteSelection((parsed as { items?: unknown }).items);
+    const pendingCodigos = sanitizeCodigos((parsed as { codigos?: unknown }).codigos);
 
-    if (!expiresAt || expiresAt <= Date.now() || items.length === 0) {
+    if (!expiresAt || expiresAt <= Date.now() || (items.length === 0 && pendingCodigos.length === 0)) {
       window.localStorage.removeItem(ROUTE_STORAGE_KEY);
-      return { items: [], expiresAt: null };
+      return { items: [], expiresAt: null, pendingCodigos: [] };
     }
 
-    return { items, expiresAt };
+    return { items, expiresAt, pendingCodigos };
   } catch {
     window.localStorage.removeItem(ROUTE_STORAGE_KEY);
-    return { items: [], expiresAt: null };
+    return { items: [], expiresAt: null, pendingCodigos: [] };
   }
 }
 
@@ -382,13 +404,19 @@ export default function ParadaTable({
   routeFilters,
   pagination,
 }: Props) {
-  const [initialRouteSelectionState] = useState<RouteSelectionState>(() =>
-    routeMode ? readStoredSelectionState() : { items: [], expiresAt: null },
+  const [initialStoredSelection] = useState<StoredRouteSelectionSnapshot>(() =>
+    routeMode ? readStoredSelectionState() : { items: [], expiresAt: null, pendingCodigos: [] },
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [routeSelectionState, dispatchRouteSelection] = useReducer(
     routeSelectionReducer,
-    initialRouteSelectionState,
+    {
+      items: initialStoredSelection.items,
+      expiresAt: initialStoredSelection.expiresAt,
+    },
+  );
+  const [pendingStoredCodigos, setPendingStoredCodigos] = useState<string[]>(
+    initialStoredSelection.pendingCodigos,
   );
   const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
@@ -398,6 +426,7 @@ export default function ParadaTable({
   const [pedModalText, setPedModalText] = useState("");
   const [isProcessingPeds, setIsProcessingPeds] = useState(false);
   const [isSelectingAllFromFilters, setIsSelectingAllFromFilters] = useState(false);
+  const [isResolvingStoredCodigos, setIsResolvingStoredCodigos] = useState(false);
   const routeSelection = routeSelectionState.items;
 
   useEffect(() => {
@@ -434,6 +463,83 @@ export default function ParadaTable({
 
     void requestCurrentLocation({ silent: true });
   }, [routeMode]);
+
+  useEffect(() => {
+    if (!routeMode || pendingStoredCodigos.length === 0) return;
+
+    let cancelled = false;
+    setIsResolvingStoredCodigos(true);
+
+    void findParadasByCodigos(pendingStoredCodigos)
+      .then((found) => {
+        if (cancelled) return;
+
+        const foundByCodigo = new Map(found.map((parada) => [parada.codigo.trim().toLowerCase(), parada]));
+        const matchedWithCoordinates: RouteSelectionItem[] = [];
+        const naoEncontrados: string[] = [];
+        let ignoradosSemCoordenada = 0;
+
+        pendingStoredCodigos.forEach((codigo) => {
+          const parada = foundByCodigo.get(codigo.toLowerCase());
+
+          if (!parada) {
+            naoEncontrados.push(codigo);
+            return;
+          }
+
+          if (parada.latitude === null || parada.longitude === null) {
+            ignoradosSemCoordenada += 1;
+            return;
+          }
+
+          matchedWithCoordinates.push({
+            id: parada.id,
+            codigo: parada.codigo,
+            status: parada.status,
+            gestao: parada.gestao,
+            classe: parada.classe,
+            municipio: parada.municipio,
+            bairro: parada.bairro,
+            logradouro: parada.logradouro,
+            referencia: parada.referencia,
+            sentido: parada.sentido,
+            quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
+            tipologiaAtual: parada.tipologiaAtual,
+            novaTipologia: parada.novaTipologia,
+            latitude: parada.latitude,
+            longitude: parada.longitude,
+            area: parada.area,
+          });
+        });
+
+        dispatchRouteSelection({
+          type: "update",
+          updater: (prev) => {
+            const existingIdSet = new Set(prev.map((item) => item.id));
+            const toAdd = matchedWithCoordinates.filter((item) => !existingIdSet.has(item.id));
+            return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
+          },
+        });
+
+        setPedImportFeedback({
+          fileName: "atalho-chamados",
+          totalLidos: pendingStoredCodigos.length,
+          selecionados: matchedWithCoordinates.length,
+          ignoradosSemCoordenada,
+          naoEncontrados,
+        });
+        setPendingStoredCodigos([]);
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsResolvingStoredCodigos(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingStoredCodigos, routeMode]);
 
   const selectedRouteIdSet = useMemo(
     () => new Set(routeSelection.map((item) => item.id)),
@@ -1212,6 +1318,11 @@ export default function ParadaTable({
             {pedImportFeedback ? (
               <span className="rounded-full bg-teal-50 px-3 py-1 font-medium text-teal-700">
                 {pedImportFeedback.selecionados}/{pedImportFeedback.totalLidos} PED(s) selecionados
+              </span>
+            ) : null}
+            {isResolvingStoredCodigos ? (
+              <span className="rounded-full bg-sky-50 px-3 py-1 font-medium text-sky-700">
+                Carregando PED(s) recebidos...
               </span>
             ) : null}
             {pedImportFeedback && (pedImportFeedback.naoEncontrados.length > 0 || pedImportFeedback.ignoradosSemCoordenada > 0) ? (

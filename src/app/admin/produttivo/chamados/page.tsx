@@ -17,6 +17,7 @@ import {
   type TicketPriorityKey as PriorityKey,
 } from "@/lib/ticket-priority";
 import { buildHref } from "@/lib/url-search-params";
+import GoToRoutesButton from "@/components/parada/go-to-routes-button";
 
 const BASE_PATH = "/admin/produttivo/chamados";
 const PER_PAGE = 12;
@@ -37,6 +38,10 @@ type PageProps = {
 function normalizePedInput(value?: string | null) {
   if (!value) return "";
   return value.replace(/\D/g, "").trim();
+}
+
+function extractTicketPed(ticket: { resource_place_name?: string | null }) {
+  return normalizePedInput(ticket.resource_place_name);
 }
 
 function ticketMatchesPed(ticket: { resource_place_name?: string | null; title?: string | null; description?: string | null }, ped: string) {
@@ -195,6 +200,16 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
       return deadlineStatus?.state === "overdue" && !isFinalized;
     });
   }
+
+  const routePedCodes = Array.from(
+    new Set(
+      filteredTickets
+        .map((ticket) => extractTicketPed(ticket))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  const routeSelectionItems = routePedCodes.map((codigo) => ({ codigo }));
+  const routeButtonHref = "/paradas/rotas?page=1";
 
   const overdueInList = filteredTickets.filter((ticket) => {
     const ticketPriority = getPriorityFromCategory(ticket.ticket_category_name);
@@ -373,6 +388,17 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                   Exibir somente chamados atrasados
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
+                  {routePedCodes.length > 0 ? (
+                    <GoToRoutesButton
+                      href={routeButtonHref}
+                      items={routeSelectionItems}
+                      label="Enviar PEDs para rotas"
+                    />
+                  ) : (
+                    <span className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-400">
+                      Nenhum PED encontrado para enviar a rotas
+                    </span>
+                  )}
                   <button
                     type="submit"
                     className="shrink-0 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
@@ -385,6 +411,11 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                   >
                     Limpar tudo
                   </Link>
+                  {routePedCodes.length > 0 && (
+                    <span className="text-xs font-medium text-slate-500">
+                      {routePedCodes.length} PED(s) enviado(s) para processamento em rotas
+                    </span>
+                  )}
                 </div>
               </div>
             </form>
