@@ -202,6 +202,29 @@ function displayValue(value: string | number | null | undefined) {
   return String(value);
 }
 
+function toRouteSelectionItem(parada: ParadaRow): RouteSelectionItem | null {
+  if (parada.latitude === null || parada.longitude === null) return null;
+
+  return {
+    id: parada.id,
+    codigo: parada.codigo,
+    status: parada.status,
+    gestao: parada.gestao,
+    classe: parada.classe,
+    municipio: parada.municipio,
+    bairro: parada.bairro,
+    logradouro: parada.logradouro,
+    referencia: parada.referencia,
+    sentido: parada.sentido,
+    quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
+    tipologiaAtual: parada.tipologiaAtual,
+    novaTipologia: parada.novaTipologia,
+    latitude: parada.latitude,
+    longitude: parada.longitude,
+    area: parada.area,
+  };
+}
+
 function getStatusTone(status: string | null) {
   if (!status || !status.trim()) return "bg-slate-100 text-slate-600";
 
@@ -417,6 +440,16 @@ export default function ParadaTable({
     [routeSelection],
   );
 
+  const selectableParadasOnPage = useMemo(
+    () => paradas.map(toRouteSelectionItem).filter((item): item is RouteSelectionItem => item !== null),
+    [paradas],
+  );
+
+  const selectedParadasOnPageCount = useMemo(
+    () => selectableParadasOnPage.filter((parada) => selectedRouteIdSet.has(parada.id)).length,
+    [selectableParadasOnPage, selectedRouteIdSet],
+  );
+
   const routePoints = useMemo(
     () => routeSelection,
     [routeSelection],
@@ -519,10 +552,8 @@ export default function ParadaTable({
   }
 
   function toggleRouteSelection(parada: ParadaRow) {
-    if (parada.latitude === null || parada.longitude === null) return;
-
-    const latitude = parada.latitude;
-    const longitude = parada.longitude;
+    const routeItem = toRouteSelectionItem(parada);
+    if (!routeItem) return;
 
     dispatchRouteSelection({
       type: "update",
@@ -531,27 +562,20 @@ export default function ParadaTable({
           return prev.filter((item) => item.id !== parada.id);
         }
 
-        return [
-          ...prev,
-          {
-            id: parada.id,
-            codigo: parada.codigo,
-            status: parada.status,
-            gestao: parada.gestao,
-            classe: parada.classe,
-            municipio: parada.municipio,
-            bairro: parada.bairro,
-            logradouro: parada.logradouro,
-            referencia: parada.referencia,
-            sentido: parada.sentido,
-            quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
-            tipologiaAtual: parada.tipologiaAtual,
-            novaTipologia: parada.novaTipologia,
-            latitude,
-            longitude,
-            area: parada.area,
-          },
-        ];
+        return [...prev, routeItem];
+      },
+    });
+  }
+
+  function selectCurrentPage() {
+    if (selectableParadasOnPage.length === 0) return;
+
+    dispatchRouteSelection({
+      type: "update",
+      updater: (prev) => {
+        const existingIdSet = new Set(prev.map((item) => item.id));
+        const toAdd = selectableParadasOnPage.filter((item) => !existingIdSet.has(item.id));
+        return toAdd.length > 0 ? [...prev, ...toAdd] : prev;
       },
     });
   }
@@ -574,26 +598,10 @@ export default function ParadaTable({
           const next = [...prev];
 
           withCoordinates.forEach((parada) => {
-            if (idSet.has(parada.id)) return;
+            const routeItem = toRouteSelectionItem(parada);
+            if (!routeItem || idSet.has(routeItem.id)) return;
 
-            next.push({
-              id: parada.id,
-              codigo: parada.codigo,
-              status: parada.status,
-              gestao: parada.gestao,
-              classe: parada.classe,
-              municipio: parada.municipio,
-              bairro: parada.bairro,
-              logradouro: parada.logradouro,
-              referencia: parada.referencia,
-              sentido: parada.sentido,
-              quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
-              tipologiaAtual: parada.tipologiaAtual,
-              novaTipologia: parada.novaTipologia,
-              latitude: parada.latitude as number,
-              longitude: parada.longitude as number,
-              area: parada.area,
-            });
+            next.push(routeItem);
           });
 
           return next;
@@ -1122,6 +1130,18 @@ export default function ParadaTable({
                   : currentLocation
                     ? "Atualizar localização"
                     : "Usar localização"}
+              </button>
+              <button
+                type="button"
+                onClick={selectCurrentPage}
+                disabled={selectableParadasOnPage.length === 0 || selectedParadasOnPageCount === selectableParadasOnPage.length}
+                className="h-11 rounded-xl border border-slate-300 px-3 text-sm text-slate-700 transition duration-200 hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 md:h-9 md:rounded-lg"
+              >
+                {selectableParadasOnPage.length === 0
+                  ? "Pagina atual sem coordenadas"
+                  : selectedParadasOnPageCount === selectableParadasOnPage.length
+                    ? "Pagina atual selecionada"
+                    : "Selecionar pagina atual"}
               </button>
               <button
                 type="button"
