@@ -6,9 +6,11 @@ import {
   getParadaCoverageSummary,
   getParadaDistinctValues,
 } from "@/lib/parada-query-cache";
+import { buildHref } from "@/lib/url-search-params";
 import AdminNav from "@/components/admin/admin-nav";
 import UserNav from "@/components/user/user-nav";
 import ParadaEquipmentMap from "@/components/parada/parada-equipment-map-client";
+import GoToRoutesButton from "@/components/parada/go-to-routes-button";
 import ParadaFilters from "@/components/parada/parada-filters";
 
 type MapaPageProps = {
@@ -79,7 +81,7 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
 
   const filteredWhere = { AND: andFilters };
 
-  const [distinctValues, coverageSummary, totalFilteredPoints, points] = await Promise.all([
+  const [distinctValues, coverageSummary, totalFilteredPoints, points, filteredCodigos] = await Promise.all([
     getParadaDistinctValues(),
     getParadaCoverageSummary(),
     prisma.parada.count({ where: filteredWhere }),
@@ -99,6 +101,13 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
       orderBy: [{ novaTipologia: "asc" }, { codigo: "asc" }],
       take: MAP_POINTS_LIMIT,
     }),
+    prisma.parada.findMany({
+      where: filteredWhere,
+      select: {
+        codigo: true,
+      },
+      orderBy: [{ codigo: "asc" }],
+    }),
   ]);
 
   const { totalParadas, paradasComCoordenada } = coverageSummary;
@@ -108,6 +117,18 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
     ? ((totalFilteredPoints / paradasComCoordenada) * 100).toFixed(1)
     : "0.0";
   const isPointsTruncated = totalFilteredPoints > points.length;
+  const routeSelectionItems = filteredCodigos.map((parada) => ({ codigo: parada.codigo }));
+  const rotasHref = buildHref(
+    "/paradas/rotas",
+    {
+      ...(codigo ? { codigo } : {}),
+      ...(status ? { status } : {}),
+      ...(municipio ? { municipio } : {}),
+      ...(bairro ? { bairro } : {}),
+      ...(logradouro ? { logradouro } : {}),
+      ...(novaTipologia ? { novaTipologia } : {}),
+    },
+  );
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.12),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(34,197,94,0.1),_transparent_28%),linear-gradient(180deg,_#f8fafc,_#eef2f7)]">
@@ -154,6 +175,18 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
             distinctValues={distinctValues}
             includePageParam={false}
           />
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <GoToRoutesButton
+              href={rotasHref}
+              items={routeSelectionItems}
+              label="Ir para Rota/Excel"
+              disabled={totalFilteredPoints === 0}
+            />
+            <span className="text-xs text-slate-500">
+              Abre a pagina de rotas mantendo filtros e paradas ja selecionadas para montagem.
+            </span>
+          </div>
 
           <p className="mt-3 text-xs text-slate-500">
             {totalFilteredPoints} paradas no filtro atual, cobrindo {coberturaFiltrada}% das paradas georreferenciadas da base.
