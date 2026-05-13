@@ -21,6 +21,7 @@ type PageProps = {
     userId?: string;
     page?: string;
     todayOnly?: string;
+    pedSearch?: string;
     serviceSearch?: string;
     executorSearch?: string;
   }>;
@@ -32,6 +33,10 @@ function normalizeText(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizePedSearch(value?: string | null): string {
+  return (value ?? "").replace(/\D/g, "").trim();
 }
 
 function getTodayInputDate(): string {
@@ -86,6 +91,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   const userId = params.userId ? parseInt(params.userId, 10) : undefined;
   const page = params.page ? Math.max(1, parseInt(params.page, 10)) : 1;
   const todayOnly = params.todayOnly === "1";
+  const pedSearch = params.pedSearch?.trim() ?? "";
   const serviceSearch = params.serviceSearch?.trim() ?? "";
   const executorSearch = params.executorSearch?.trim() ?? "";
 
@@ -95,7 +101,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
 
   const apiStart = effectiveStart ? toApiDate(effectiveStart) : undefined;
   const apiEnd = effectiveEnd ? toApiDate(effectiveEnd) : undefined;
-  const hasTextFilters = Boolean(serviceSearch || executorSearch);
+  const hasTextFilters = Boolean(pedSearch || serviceSearch || executorSearch);
   const queryPage = hasTextFilters ? 1 : page;
   const queryPerPage = hasTextFilters ? 200 : PER_PAGE;
 
@@ -148,11 +154,23 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   ];
   const items = hasTextFilters ? allFetchedItems : (response.results ?? []);
 
+  const normalizedPedSearch = normalizePedSearch(pedSearch);
   const normalizedServiceSearch = normalizeText(serviceSearch);
   const normalizedExecutorSearch = normalizeText(executorSearch);
-  const hasLocalTextFilters = Boolean(normalizedServiceSearch || normalizedExecutorSearch);
+  const hasLocalTextFilters = Boolean(
+    normalizedPedSearch || normalizedServiceSearch || normalizedExecutorSearch,
+  );
+  const pedMapForFiltering = hasLocalTextFilters ? await getPedMapForItems(items) : {};
 
   const filteredItems = items.filter((item) => {
+    if (normalizedPedSearch) {
+      const pedFromWork = item.work_id ? pedMapForFiltering[item.work_id] ?? "" : "";
+      const pedFromField = extractPedFromFieldValues(item.field_values) ?? "";
+      const pedFromDocument = String(item.document_number ?? "");
+      const combinedPed = `${pedFromWork} ${pedFromField} ${pedFromDocument}`;
+      if (!normalizePedSearch(combinedPed).includes(normalizedPedSearch)) return false;
+    }
+
     if (normalizedServiceSearch) {
       const serviceValue = normalizeText(
         getFieldTextByNameIncludes(item.field_values, "SERVICO EXECUTADO"),
@@ -180,7 +198,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   const listTotal = hasLocalTextFilters ? filteredTotal : total;
   const listPage = hasLocalTextFilters ? filteredPage : page;
 
-  const pedMap = await getPedMapForItems(listItems);
+  const pedMap = hasLocalTextFilters ? pedMapForFiltering : await getPedMapForItems(listItems);
   const routePedCodes = Array.from(
     new Set(
       listItems
@@ -213,6 +231,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
     effectiveEnd,
     userId ? String(userId) : "",
     todayOnly ? "1" : "",
+    pedSearch,
     serviceSearch,
     executorSearch,
   ]
@@ -224,6 +243,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   if (rawEnd && !todayOnly) preserveParams.endDate = rawEnd;
   if (params.userId) preserveParams.userId = params.userId;
   if (todayOnly) preserveParams.todayOnly = "1";
+  if (pedSearch) preserveParams.pedSearch = pedSearch;
   if (serviceSearch) preserveParams.serviceSearch = serviceSearch;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
 
@@ -275,7 +295,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
                   Refine por periodo e tecnico para localizar os registros.
                 </p>
               </div>
-              {(effectiveStart || effectiveEnd || userId || todayOnly || serviceSearch || executorSearch) && (
+              {(effectiveStart || effectiveEnd || userId || todayOnly || pedSearch || serviceSearch || executorSearch) && (
                 <Link
                   href={BASE_PATH}
                   className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-100"
@@ -322,6 +342,17 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label className="space-y-1 text-sm text-slate-700">
+                <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">PED</span>
+                <input
+                  type="text"
+                  name="pedSearch"
+                  defaultValue={pedSearch}
+                  placeholder="Ex.: 160444"
+                  className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-300"
+                />
               </label>
 
               <label className="space-y-1 text-sm text-slate-700">
@@ -411,6 +442,11 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
                     {selectedMemberLabel}
                   </span>
                 )}
+                {pedSearch && (
+                  <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-800">
+                    PED: {pedSearch}
+                  </span>
+                )}
                 {serviceSearch && (
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-800">
                     Servico: {serviceSearch}
@@ -447,6 +483,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
                       BASE_PATH,
                       {
                         ...(userId ? { userId: String(userId) } : {}),
+                        ...(pedSearch ? { pedSearch } : {}),
                         ...(serviceSearch ? { serviceSearch } : {}),
                         ...(executorSearch ? { executorSearch } : {}),
                         ...(!isActive ? { startDate, endDate } : {}),
@@ -480,6 +517,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
                   BASE_PATH,
                   {
                     ...(userId ? { userId: String(userId) } : {}),
+                    ...(pedSearch ? { pedSearch } : {}),
                     ...(serviceSearch ? { serviceSearch } : {}),
                     ...(executorSearch ? { executorSearch } : {}),
                   },
@@ -494,7 +532,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
         </div>
       </section>
 
-      {(effectiveStart || effectiveEnd || userId || serviceSearch || executorSearch || todayOnly) && (
+      {(effectiveStart || effectiveEnd || userId || pedSearch || serviceSearch || executorSearch || todayOnly) && (
         <section className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div className="flex flex-wrap gap-2 text-sm">
             {(effectiveStart || effectiveEnd) && !todayOnly && (
@@ -510,6 +548,11 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
             {selectedMemberLabel && (
               <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-medium text-amber-800">
                 Tecnico filtrado: {selectedMemberLabel}
+              </span>
+            )}
+            {pedSearch && (
+              <span className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 font-medium text-rose-800">
+                PED filtrado: {pedSearch}
               </span>
             )}
             {serviceSearch && (
