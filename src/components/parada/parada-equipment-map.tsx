@@ -15,9 +15,15 @@ type EquipmentPoint = {
   longitude: number;
 };
 
+type CurrentLocation = {
+  latitude: number;
+  longitude: number;
+};
+
 type Props = {
   points: EquipmentPoint[];
   heightClassName?: string;
+  currentLocation?: CurrentLocation | null;
 };
 
 type EquipmentSummaryItem = {
@@ -70,7 +76,7 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px]" }: Props) {
+export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px]", currentLocation: initialLocation }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerRef = useRef<L.LayerGroup | null>(null);
@@ -78,6 +84,9 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
   const cancelOsLoadingRef = useRef(false);
   const osLoadingRunRef = useRef(0);
 
+  const [currentLocation, setCurrentLocation] = useState<CurrentLocation | null>(initialLocation ?? null);
+  const [isRequestingLocation, setIsRequestingLocation] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
   const [osFilter, setOsFilter] = useState<OsFilter>("none");
   const [isLoadingOsFilter, setIsLoadingOsFilter] = useState(false);
   const [osLoadingProgress, setOsLoadingProgress] = useState({ processed: 0, total: 0 });
@@ -89,6 +98,58 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
     if (osLoadingProgress.total <= 0) return 0;
     return Math.min(100, Math.round((osLoadingProgress.processed / osLoadingProgress.total) * 100));
   }, [osLoadingProgress]);
+
+  const requestCurrentLocation = useCallback(() => {
+    setIsRequestingLocation(true);
+    setLocationError(null);
+
+    if (!("geolocation" in navigator)) {
+      setLocationError("Geolocalizacao nao disponivel neste navegador.");
+      setIsRequestingLocation(false);
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLocation = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        console.log("Localização obtida:", newLocation);
+        setCurrentLocation(newLocation);
+        setLocationError(null);
+        setIsRequestingLocation(false);
+      },
+      (error) => {
+        console.error("Erro de geolocalização:", error);
+        let errorMsg = "Erro ao obter localizacao.";
+        if (error.code === error.PERMISSION_DENIED) {
+          errorMsg = "Permissao de localizacao negada.";
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          errorMsg = "Posicao indisponivel.";
+        } else if (error.code === error.TIMEOUT) {
+          errorMsg = "Requisicao de localizacao expirou.";
+        }
+        setLocationError(errorMsg);
+        setIsRequestingLocation(false);
+      },
+    );
+  }, []);
+
+  // Centralizar o mapa quando a localização mudar
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map && currentLocation) {
+      // Usar setTimeout para garantir que o mapa está pronto
+      const timeoutId = setTimeout(() => {
+        map.setView([currentLocation.latitude, currentLocation.longitude], 19, {
+          animate: true,
+          duration: 1,
+        });
+      }, 100);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [currentLocation]);
 
   const filteredPoints = useMemo(() => {
     if (osFilter === "none") return points;
@@ -165,6 +226,22 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
       mapRef.current = null;
       layerRef.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    if (!initialLocation && !currentLocation && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+        },
+        () => {
+          // Silently fail if geolocation is not available
+        },
+      );
+    }
   }, []);
 
   useEffect(() => {
@@ -264,6 +341,20 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
 
     const latLngs: L.LatLngExpression[] = [];
 
+    if (currentLocation) {
+      const currentMarker = L.circleMarker([currentLocation.latitude, currentLocation.longitude], {
+        radius: 8,
+        color: "#1d4ed8",
+        weight: 3,
+        fillColor: "#93c5fd",
+        fillOpacity: 0.95,
+      });
+
+      currentMarker.bindPopup("Localizacao atual");
+      currentMarker.addTo(layerGroup);
+      latLngs.push([currentLocation.latitude, currentLocation.longitude]);
+    }
+
     filteredPoints.forEach((point) => {
       const type = normalizeEquipmentType(point);
       const color = colorByType.get(type) ?? "#2563eb";
@@ -347,7 +438,7 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
       padding: [36, 36],
       maxZoom: 16,
     });
-  }, [colorByType, fetchActivity, filteredPoints]);
+  }, [colorByType, currentLocation, fetchActivity, filteredPoints]);
 
   return (
     <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_290px]">
@@ -362,6 +453,36 @@ export default function ParadaEquipmentMap({ points, heightClassName = "h-[600px
         <p className="mt-1 text-sm text-slate-600">
           {equipmentSummary.length} tipos encontrados em {filteredPoints.length} paradas georreferenciadas.
         </p>
+
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            onClick={requestCurrentLocation}
+            disabled={isRequestingLocation}
+            className="w-full rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isRequestingLocation ? "Obtendo localizacao..." : "Mostrar minha localizacao"}
+          </button>
+
+          {locationError && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+              <p className="text-xs text-red-700">{locationError}</p>
+            </div>
+          )}
+
+          {currentLocation && (
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+              <div className="flex items-center gap-2">
+                <span
+                  aria-hidden
+                  className="inline-block h-3 w-3 rounded-full"
+                  style={{ backgroundColor: "#93c5fd" }}
+                />
+                <span className="text-sm font-medium text-slate-700">Sua localizacao</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="mt-4 space-y-1.5">
           <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">Filtro de OS</span>
