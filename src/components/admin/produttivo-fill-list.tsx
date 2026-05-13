@@ -7,6 +7,7 @@ import type { ProduttivoManutencaoItem, ProduttivoFieldValue } from "@/types/pro
 import { extractPedFromFieldValues } from "@/lib/ped-extraction";
 import { buildHref } from "@/lib/url-search-params";
 import { accentStyles, type AccentColor } from "@/lib/badge-styles";
+import { formatDateTimeSimple } from "@/lib/datetime-formatting";
 
 const PER_PAGE = 20;
 
@@ -259,6 +260,11 @@ function shouldHideDetailField(name?: string | null): boolean {
   return HIDDEN_DETAIL_FIELD_NAMES.some((fieldName) => normalized.includes(fieldName));
 }
 
+function isIsoDateTime(value: string): boolean {
+  // Padrão ISO 8601: YYYY-MM-DDTHH:mm:ss[.mmm]±HH:mm
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
+}
+
 function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
   const sorted = [...fieldValues.filter((fv) => fv.name && !shouldHideDetailField(fv.name))].sort(
     (a, b) => priorityIndex(a.name) - priorityIndex(b.name)
@@ -268,9 +274,27 @@ function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
     <div className="mt-3">
       <dl className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
         {sorted.map((fv, idx) => {
-          const displayValue = Array.isArray(fv.value)
-            ? fv.value.join(", ")
-            : (fv.value ?? "---");
+          const rawValue = Array.isArray(fv.value) ? fv.value.join(", ") : fv.value ?? "---";
+          const displayValue = String(rawValue);
+
+          // Se for um campo de data, formata de forma legível: "27/04/2026 13:04"
+          if (
+            fv.name?.toUpperCase().includes("DATA") &&
+            isIsoDateTime(displayValue)
+          ) {
+            const formatted = formatDateTimeSimple(displayValue);
+            return (
+              <div key={idx} className="flex flex-col">
+                <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
+                  {fv.name}
+                </dt>
+                <dd className="mt-0.5 text-sm text-slate-800 break-words">
+                  {formatted}
+                </dd>
+              </div>
+            );
+          }
+
           return (
             <div key={idx} className="flex flex-col">
               <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
