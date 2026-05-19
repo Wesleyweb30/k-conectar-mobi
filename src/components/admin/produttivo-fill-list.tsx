@@ -277,11 +277,8 @@ function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
           const rawValue = Array.isArray(fv.value) ? fv.value.join(", ") : fv.value ?? "---";
           const displayValue = String(rawValue);
 
-          // Se for um campo de data, formata de forma legível: "27/04/2026 13:04"
-          if (
-            fv.name?.toUpperCase().includes("DATA") &&
-            isIsoDateTime(displayValue)
-          ) {
+          // Formata qualquer valor ISO de data/hora para exibição legível.
+          if (isIsoDateTime(displayValue)) {
             const formatted = formatDateTimeSimple(displayValue);
             return (
               <div key={idx} className="flex flex-col">

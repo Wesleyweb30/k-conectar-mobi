@@ -12,6 +12,7 @@ export { extractPedFromTitle } from "@/lib/ped-extraction";
 export const FORM_ID_MANUTENCAO = 356263;
 export const FORM_ID_IMPLANTACAO = 485100;
 export const FORM_ID_INSTALACAO_ELETRICA = 443660;
+export const FORM_ID_INSPECAO = 356389;
 
 type ProduttivoQueryParams = {
     startDate?: string;

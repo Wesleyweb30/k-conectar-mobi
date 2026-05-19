@@ -224,6 +224,18 @@ export default function AdminNav({ userName }: AdminNavProps) {
                   Instalação Elétrica
                 </Link>
                 <Link
+                  href="/admin/produttivo/inspecao"
+                  onClick={() => setProduttivoOpen(false)}
+                  className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
+                    pathname.startsWith("/admin/produttivo/inspecao")
+                      ? "bg-indigo-50 text-indigo-700"
+                      : "text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="inline-block h-2 w-2 rounded-full bg-indigo-400" />
+                  Inspeção
+                </Link>
+                <Link
                   href="/admin/produttivo/ligacao-paradas"
                   onClick={() => setProduttivoOpen(false)}
                   className={`flex items-center gap-2.5 px-4 py-2 text-sm font-medium transition-colors ${
@@ -252,7 +264,6 @@ export default function AdminNav({ userName }: AdminNavProps) {
           </div>
 
           {navLink("/admin/usuarios", "Usuários")}
-
           <span className="text-sm text-gray-400">{userName}</span>
           <button
             onClick={handleSignOut}
@@ -326,6 +337,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
               { href: "/admin/produttivo/manutencao", label: "Manutenção", color: "bg-amber-400" },
               { href: "/admin/produttivo/implantacao", label: "Implantação", color: "bg-sky-400" },
               { href: "/admin/produttivo/instalacao-eletrica", label: "Instalação Elétrica", color: "bg-emerald-400" },
+              { href: "/admin/produttivo/inspecao", label: "Inspeção", color: "bg-indigo-400" },
               { href: "/admin/produttivo/ligacao-paradas", label: "Radar Sem Manutenção", color: "bg-cyan-400" },
               { href: "/admin/produttivo/chamados", label: "Chamados", color: "bg-rose-400" },
             ].map(({ href, label, color, exact }) => (

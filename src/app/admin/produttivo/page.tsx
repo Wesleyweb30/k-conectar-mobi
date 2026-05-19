@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import {
+  FORM_ID_INSPECAO,
   FORM_ID_IMPLANTACAO,
   FORM_ID_INSTALACAO_ELETRICA,
   FORM_ID_MANUTENCAO,
@@ -37,13 +38,14 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
     const apiStart = toApiDate(rawStart);
     const apiEnd = toApiDate(rawEnd);
 
-    const [manuCount, implCount, eletricaCount] = await Promise.all([
+    const [manuCount, implCount, eletricaCount, inspecaoCount] = await Promise.all([
       getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_MANUTENCAO, userId: rawUserId }),
       getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_IMPLANTACAO, userId: rawUserId }),
       getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_INSTALACAO_ELETRICA, userId: rawUserId }),
+      getProduttivoFormFillCount({ startDate: apiStart, endDate: apiEnd, formId: FORM_ID_INSPECAO, userId: rawUserId }),
     ]);
 
-    const total = manuCount + implCount + eletricaCount;
+    const total = manuCount + implCount + eletricaCount + inspecaoCount;
     const memberName = rawUserId
       ? (members.find((m) => m.id === rawUserId)?.name ?? `ID ${rawUserId}`)
       : "Todos";
@@ -63,7 +65,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
           <strong>{memberName}</strong>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <MetricCard
             label="Manutenção"
             value={manuCount}
@@ -86,6 +88,13 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
             href="/admin/produttivo/instalacao-eletrica"
           />
           <MetricCard
+            label="Inspeção"
+            value={inspecaoCount}
+            color="indigo"
+            description="Formulários de inspeção no período"
+            href="/admin/produttivo/inspecao"
+          />
+          <MetricCard
             label="Total"
             value={total}
             color="violet"
@@ -101,7 +110,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
     getMonthRange(now.getFullYear(), now.getMonth() - offset)
   );
 
-  const [manuCounts, implCounts, eletricaCounts] = await Promise.all([
+  const [manuCounts, implCounts, eletricaCounts, inspecaoCounts] = await Promise.all([
     Promise.all(
       monthRanges.map((m) =>
         getProduttivoFormFillCount({
@@ -132,6 +141,16 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
         })
       )
     ),
+    Promise.all(
+      monthRanges.map((m) =>
+        getProduttivoFormFillCount({
+          startDate: m.start,
+          endDate: m.end,
+          formId: FORM_ID_INSPECAO,
+          userId: rawUserId,
+        })
+      )
+    ),
   ]);
 
   const monthData = monthRanges.map((m, i) => ({
@@ -139,7 +158,8 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
     manutencao: manuCounts[i],
     implantacao: implCounts[i],
     eletrica: eletricaCounts[i],
-    total: manuCounts[i] + implCounts[i] + eletricaCounts[i],
+    inspecao: inspecaoCounts[i],
+    total: manuCounts[i] + implCounts[i] + eletricaCounts[i] + inspecaoCounts[i],
   }));
 
   const maxTotal = Math.max(...monthData.map((d) => d.total), 1);
@@ -153,7 +173,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
       </Suspense>
 
       {/* Cards resumo do mês atual */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard
           label="Manutenção — mês atual"
           value={monthData[0].manutencao}
@@ -174,6 +194,13 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
           color="emerald"
           description={monthData[0].label}
           href="/admin/produttivo/instalacao-eletrica"
+        />
+        <MetricCard
+          label="Inspeção — mês atual"
+          value={monthData[0].inspecao}
+          color="indigo"
+          description={monthData[0].label}
+          href="/admin/produttivo/inspecao"
         />
         <MetricCard
           label="Total — mês atual"
@@ -200,6 +227,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
             const manuPercent = item.total > 0 ? (item.manutencao / item.total) * 100 : 0;
             const implPercent = item.total > 0 ? (item.implantacao / item.total) * 100 : 0;
             const eletricaPercent = item.total > 0 ? (item.eletrica / item.total) * 100 : 0;
+            const inspecaoPercent = item.total > 0 ? (item.inspecao / item.total) * 100 : 0;
             return (
               <div
                 key={item.label}
@@ -219,6 +247,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
                     <div className="h-full bg-amber-400" style={{ width: `${manuPercent.toFixed(1)}%` }} />
                     <div className="h-full bg-sky-400" style={{ width: `${implPercent.toFixed(1)}%` }} />
                     <div className="h-full bg-emerald-400" style={{ width: `${eletricaPercent.toFixed(1)}%` }} />
+                    <div className="h-full bg-indigo-400" style={{ width: `${inspecaoPercent.toFixed(1)}%` }} />
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
@@ -234,6 +263,10 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
                     <span className="inline-block h-2 w-2 rounded-full bg-emerald-400" />
                     Inst. Elétrica: <strong>{item.eletrica}</strong>
                   </span>
+                  <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <span className="inline-block h-2 w-2 rounded-full bg-indigo-400" />
+                    Inspeção: <strong>{item.inspecao}</strong>
+                  </span>
                 </div>
               </div>
             );
@@ -242,7 +275,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
       </div>
 
       {/* Comparativos individuais por formulário */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
         <IndividualMonthCard
           title="Manutenção"
           href="/admin/produttivo/manutencao"
@@ -261,6 +294,12 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
           color="emerald"
           data={monthData.map((m) => ({ label: m.label, count: m.eletrica }))}
         />
+        <IndividualMonthCard
+          title="Inspeção"
+          href="/admin/produttivo/inspecao"
+          color="indigo"
+          data={monthData.map((m) => ({ label: m.label, count: m.inspecao }))}
+        />
       </div>
     </div>
   );
@@ -269,7 +308,7 @@ export default async function AdminProduttivoPage({ searchParams }: PageProps) {
 type IndividualMonthCardProps = {
   title: string;
   href: string;
-  color: "amber" | "sky" | "emerald";
+  color: "amber" | "sky" | "emerald" | "indigo";
   data: { label: string; count: number }[];
 };
 
@@ -277,6 +316,7 @@ const individualColorMap: Record<IndividualMonthCardProps["color"], { border: st
   amber: { border: "border-amber-200", bg: "bg-amber-50/40", bar: "bg-amber-400", text: "text-amber-700", badge: "border-amber-200 bg-amber-50 text-amber-700" },
   sky:   { border: "border-sky-200",   bg: "bg-sky-50/40",   bar: "bg-sky-400",   text: "text-sky-700",   badge: "border-sky-200 bg-sky-50 text-sky-700" },
   emerald: { border: "border-emerald-200", bg: "bg-emerald-50/40", bar: "bg-emerald-400", text: "text-emerald-700", badge: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  indigo: { border: "border-indigo-200", bg: "bg-indigo-50/40", bar: "bg-indigo-400", text: "text-indigo-700", badge: "border-indigo-200 bg-indigo-50 text-indigo-700" },
 };
 
 function IndividualMonthCard({ title, href, color, data }: IndividualMonthCardProps) {
@@ -333,7 +373,7 @@ function PageHeader() {
       <span className="inline-flex items-center rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
         Analytics · Produttivo
       </span>
-      <h1 className="mt-2 text-2xl font-bold text-slate-900">Manutenção, Implantação &amp; Elétrica</h1>
+      <h1 className="mt-2 text-2xl font-bold text-slate-900">Manutenção, Implantação, Elétrica &amp; Inspeção</h1>
       <p className="mt-1 text-sm text-slate-600">
         Contagem de registros por mês e por tipo de serviço com base nos formulários do Produttivo.
       </p>
@@ -344,7 +384,7 @@ function PageHeader() {
 type MetricCardProps = {
   label: string;
   value: number;
-  color: "amber" | "sky" | "violet" | "emerald";
+  color: "amber" | "sky" | "violet" | "emerald" | "indigo";
   description?: string;
   href?: string;
 };
@@ -354,6 +394,7 @@ const colorMap: Record<MetricCardProps["color"], string> = {
   sky: "border-sky-200 bg-sky-50/60 text-sky-700 [&_strong]:text-sky-900",
   violet: "border-violet-200 bg-violet-50/60 text-violet-700 [&_strong]:text-violet-900",
   emerald: "border-emerald-200 bg-emerald-50/60 text-emerald-700 [&_strong]:text-emerald-900",
+  indigo: "border-indigo-200 bg-indigo-50/60 text-indigo-700 [&_strong]:text-indigo-900",
 };
 
 const hoverMap: Record<MetricCardProps["color"], string> = {
@@ -361,6 +402,7 @@ const hoverMap: Record<MetricCardProps["color"], string> = {
   sky: "hover:bg-sky-100/80",
   violet: "hover:bg-violet-100/80",
   emerald: "hover:bg-emerald-100/80",
+  indigo: "hover:bg-indigo-100/80",
 };
 
 function MetricCard({ label, value, color, description, href }: MetricCardProps) {

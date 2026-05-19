@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
+  FORM_ID_INSPECAO,
   FORM_ID_IMPLANTACAO,
   FORM_ID_INSTALACAO_ELETRICA,
   FORM_ID_MANUTENCAO,
@@ -63,6 +64,7 @@ export default async function AdminHomePage() {
     manutencaoDiaria,
     implantacaoDiaria,
     eletricaDiaria,
+    inspecaoDiaria,
     pendingTickets,
     totalParadas,
     paradasSemStatus,
@@ -83,6 +85,11 @@ export default async function AdminHomePage() {
       endDate: todayApiDate,
       formId: FORM_ID_INSTALACAO_ELETRICA,
     }).catch(() => 0),
+    getProduttivoFormFillCount({
+      startDate: todayApiDate,
+      endDate: todayApiDate,
+      formId: FORM_ID_INSPECAO,
+    }).catch(() => 0),
     getAllProduttivoTickets(100, "pending").catch(() => []),
     prisma.parada.count(),
     prisma.parada.count({
@@ -100,7 +107,7 @@ export default async function AdminHomePage() {
     }),
   ]);
 
-  const totalAtividadesDiarias = manutencaoDiaria + implantacaoDiaria + eletricaDiaria;
+  const totalAtividadesDiarias = manutencaoDiaria + implantacaoDiaria + eletricaDiaria + inspecaoDiaria;
 
   const ticketWithDeadline = pendingTickets
     .map((ticket) => {
@@ -206,7 +213,15 @@ export default async function AdminHomePage() {
           <p className="mt-2 text-3xl font-bold leading-none text-emerald-900">{formatNumber(eletricaDiaria)}</p>
         </Link>
 
-        <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-5 shadow-sm xl:col-span-2">
+        <Link
+          href="/admin/produttivo/inspecao"
+          className="rounded-2xl border border-indigo-200 bg-indigo-50/80 p-5 shadow-sm transition hover:-translate-y-0.5 hover:bg-indigo-100/80 xl:col-span-2"
+        >
+          <p className="text-xs uppercase tracking-wide text-indigo-700">Inspecao diaria</p>
+          <p className="mt-2 text-3xl font-bold leading-none text-indigo-900">{formatNumber(inspecaoDiaria)}</p>
+        </Link>
+
+        <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-5 shadow-sm xl:col-span-12">
           <p className="text-xs uppercase tracking-wide text-violet-700">Total de operacoes do dia</p>
           <p className="mt-2 text-3xl font-bold leading-none text-violet-900">{formatNumber(totalAtividadesDiarias)}</p>
         </div>
