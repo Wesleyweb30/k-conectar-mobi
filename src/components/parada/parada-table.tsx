@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { useEffect, useMemo, useReducer, useState, useTransition } from "react";
 import * as XLSX from "xlsx";
 import ParadaRouteMap from "@/components/parada/parada-route-map";
 import { ROUTE_SELECTION_TTL_MS, ROUTE_STORAGE_KEY } from "@/lib/session-policy";
-import { findParadasByCodigos, findParadasByFilters } from "@/app/paradas/actions";
+import { findParadasByCodigos, findParadasByFilters, updateParadaAction } from "@/app/paradas/actions";
 
 type ParadaRow = {
   id: string;
@@ -30,6 +31,7 @@ type ParadaRow = {
 type Props = {
   paradas: ParadaRow[];
   routeMode?: boolean;
+  canEdit?: boolean;
   routeFilters?: {
     codigo?: string;
     status?: string;
@@ -46,6 +48,20 @@ type Props = {
     prevHref: string;
     nextHref: string;
   };
+};
+
+type ParadaEditFormValues = {
+  status: string;
+  novaTipologia: string;
+  quantidadeAbrigosTotens: string;
+  municipio: string;
+  bairro: string;
+  logradouro: string;
+  referencia: string;
+  sentido: string;
+  latitude: string;
+  longitude: string;
+  area: string;
 };
 
 type RouteSelectionItem = {
@@ -222,6 +238,41 @@ function routeSelectionReducer(
 function displayValue(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "") return "-";
   return String(value);
+}
+
+function buildEditFormValues(parada: ParadaRow | null): ParadaEditFormValues {
+  if (!parada) {
+    return {
+      status: "",
+      novaTipologia: "",
+      quantidadeAbrigosTotens: "",
+      municipio: "",
+      bairro: "",
+      logradouro: "",
+      referencia: "",
+      sentido: "",
+      latitude: "",
+      longitude: "",
+      area: "",
+    };
+  }
+
+  return {
+    status: parada.status ?? "",
+    novaTipologia: parada.novaTipologia ?? "",
+    quantidadeAbrigosTotens:
+      parada.quantidadeAbrigosTotens === null || parada.quantidadeAbrigosTotens === undefined
+        ? ""
+        : String(parada.quantidadeAbrigosTotens),
+    municipio: parada.municipio ?? "",
+    bairro: parada.bairro ?? "",
+    logradouro: parada.logradouro ?? "",
+    referencia: parada.referencia ?? "",
+    sentido: parada.sentido ?? "",
+    latitude: parada.latitude === null || parada.latitude === undefined ? "" : String(parada.latitude),
+    longitude: parada.longitude === null || parada.longitude === undefined ? "" : String(parada.longitude),
+    area: parada.area ?? "",
+  };
 }
 
 function toRouteSelectionItem(parada: ParadaRow): RouteSelectionItem | null {
@@ -401,13 +452,21 @@ type ExportAllRow = {
 export default function ParadaTable({
   paradas,
   routeMode = false,
+  canEdit = false,
   routeFilters,
   pagination,
 }: Props) {
+  const router = useRouter();
+  const [isSavingParada, startSavingParada] = useTransition();
   const [initialStoredSelection] = useState<StoredRouteSelectionSnapshot>(() =>
     routeMode ? readStoredSelectionState() : { items: [], expiresAt: null, pendingCodigos: [] },
   );
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [editFormValues, setEditFormValues] = useState<ParadaEditFormValues>(
+    buildEditFormValues(null),
+  );
+  const [editSaveFeedback, setEditSaveFeedback] = useState<string | null>(null);
+  const [editSaveError, setEditSaveError] = useState<string | null>(null);
   const [routeSelectionState, dispatchRouteSelection] = useReducer(
     routeSelectionReducer,
     {
@@ -566,6 +625,12 @@ export default function ParadaTable({
     [paradas, selectedId],
   );
 
+  useEffect(() => {
+    setEditFormValues(buildEditFormValues(selectedParada));
+    setEditSaveFeedback(null);
+    setEditSaveError(null);
+  }, [selectedParada?.id]);
+
   const paradaById = useMemo(
     () => new Map(paradas.map((parada) => [parada.id, parada])),
     [paradas],
@@ -583,6 +648,46 @@ export default function ParadaTable({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [selectedParada]);
+
+  function updateEditFormField(field: keyof ParadaEditFormValues, value: string) {
+    setEditFormValues((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function saveSelectedParada() {
+    if (!selectedParada) return;
+
+    setEditSaveFeedback(null);
+    setEditSaveError(null);
+
+    startSavingParada(() => {
+      void updateParadaAction({
+        id: selectedParada.id,
+        status: editFormValues.status,
+        novaTipologia: editFormValues.novaTipologia,
+        quantidadeAbrigosTotens: editFormValues.quantidadeAbrigosTotens,
+        municipio: editFormValues.municipio,
+        bairro: editFormValues.bairro,
+        logradouro: editFormValues.logradouro,
+        referencia: editFormValues.referencia,
+        sentido: editFormValues.sentido,
+        latitude: editFormValues.latitude,
+        longitude: editFormValues.longitude,
+        area: editFormValues.area,
+      })
+        .then((result) => {
+          if (!result.ok) {
+            setEditSaveError(result.error);
+            return;
+          }
+
+          setEditSaveFeedback("Dados da parada atualizados com sucesso.");
+          router.refresh();
+        })
+        .catch(() => {
+          setEditSaveError("Nao foi possivel atualizar os dados da parada.");
+        });
+    });
+  }
 
   function requestCurrentLocation(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
@@ -1532,6 +1637,143 @@ export default function ParadaTable({
                   <dd className="text-gray-800 font-medium">{displayValue(selectedParada.area)}</dd>
                 </div>
               </dl>
+
+              {!routeMode && canEdit ? (
+                <section className="mt-7 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">Atualizar dados da parada</h4>
+                  <p className="mt-1 text-xs text-slate-600">
+                    Edite os campos abaixo e clique em salvar para atualizar a base.
+                  </p>
+
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Status</span>
+                      <input
+                        value={editFormValues.status}
+                        onChange={(event) => updateEditFormField("status", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Nova tipologia</span>
+                      <input
+                        value={editFormValues.novaTipologia}
+                        onChange={(event) => updateEditFormField("novaTipologia", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Quantidade abrigos/totens</span>
+                      <input
+                        value={editFormValues.quantidadeAbrigosTotens}
+                        onChange={(event) => updateEditFormField("quantidadeAbrigosTotens", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Area</span>
+                      <input
+                        value={editFormValues.area}
+                        onChange={(event) => updateEditFormField("area", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Municipio</span>
+                      <input
+                        value={editFormValues.municipio}
+                        onChange={(event) => updateEditFormField("municipio", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Bairro</span>
+                      <input
+                        value={editFormValues.bairro}
+                        onChange={(event) => updateEditFormField("bairro", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600 md:col-span-2">
+                      <span>Logradouro</span>
+                      <input
+                        value={editFormValues.logradouro}
+                        onChange={(event) => updateEditFormField("logradouro", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600 md:col-span-2">
+                      <span>Referencia</span>
+                      <input
+                        value={editFormValues.referencia}
+                        onChange={(event) => updateEditFormField("referencia", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Sentido</span>
+                      <input
+                        value={editFormValues.sentido}
+                        onChange={(event) => updateEditFormField("sentido", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Latitude</span>
+                      <input
+                        value={editFormValues.latitude}
+                        onChange={(event) => updateEditFormField("latitude", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+
+                    <label className="space-y-1 text-xs text-slate-600">
+                      <span>Longitude</span>
+                      <input
+                        value={editFormValues.longitude}
+                        onChange={(event) => updateEditFormField("longitude", event.target.value)}
+                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                      />
+                    </label>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={saveSelectedParada}
+                      disabled={isSavingParada}
+                      className="rounded-xl border border-blue-300 bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isSavingParada ? "Salvando..." : "Salvar alteracoes"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setEditFormValues(buildEditFormValues(selectedParada))}
+                      disabled={isSavingParada}
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      Reverter
+                    </button>
+                  </div>
+
+                  {editSaveFeedback ? (
+                    <p className="mt-3 text-sm font-medium text-emerald-700">{editSaveFeedback}</p>
+                  ) : null}
+                  {editSaveError ? (
+                    <p className="mt-3 text-sm font-medium text-rose-700">{editSaveError}</p>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
           ) : null}
         </aside>

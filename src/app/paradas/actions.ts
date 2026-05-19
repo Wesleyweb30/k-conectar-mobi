@@ -1,5 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
+import { revalidatePath } from "next/cache";
+import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export type ParadaRouteResult = {
@@ -135,4 +138,75 @@ export async function findParadasByFilters(
     },
     orderBy: [{ municipio: "asc" }, { bairro: "asc" }, { codigo: "asc" }],
   });
+}
+
+type UpdateParadaInput = {
+  id: string;
+  status?: string;
+  novaTipologia?: string;
+  quantidadeAbrigosTotens?: string;
+  municipio?: string;
+  bairro?: string;
+  logradouro?: string;
+  referencia?: string;
+  sentido?: string;
+  latitude?: string;
+  longitude?: string;
+  area?: string;
+};
+
+function normalizeNullable(value?: string) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parseNullableInt(value?: string) {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseNullableFloat(value?: string) {
+  const trimmed = value?.trim().replace(",", ".");
+  if (!trimmed) return null;
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+export async function updateParadaAction(input: UpdateParadaInput) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) {
+    return { ok: false as const, error: "Sessao invalida. Faca login novamente." };
+  }
+
+  if (session.user.role !== "admin") {
+    return { ok: false as const, error: "Apenas administradores podem atualizar paradas." };
+  }
+
+  if (!input.id?.trim()) {
+    return { ok: false as const, error: "Parada invalida para atualizacao." };
+  }
+
+  await prisma.parada.update({
+    where: { id: input.id },
+    data: {
+      status: normalizeNullable(input.status),
+      novaTipologia: normalizeNullable(input.novaTipologia),
+      quantidadeAbrigosTotens: parseNullableInt(input.quantidadeAbrigosTotens),
+      municipio: normalizeNullable(input.municipio),
+      bairro: normalizeNullable(input.bairro),
+      logradouro: normalizeNullable(input.logradouro),
+      referencia: normalizeNullable(input.referencia),
+      sentido: normalizeNullable(input.sentido),
+      latitude: parseNullableFloat(input.latitude),
+      longitude: parseNullableFloat(input.longitude),
+      area: normalizeNullable(input.area),
+    },
+  });
+
+  revalidatePath("/paradas");
+  revalidatePath("/paradas/rotas");
+
+  return { ok: true as const };
 }

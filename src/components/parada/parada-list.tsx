@@ -18,6 +18,7 @@ type SearchParams = {
 type Props = {
   searchParams?: SearchParams;
   routeMode?: boolean;
+  canEdit?: boolean;
 };
 
 const PAGE_SIZE = 20;
@@ -28,7 +29,7 @@ function normalizeParam(value?: string) {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export default async function ParadaList({ searchParams, routeMode = false }: Props) {
+export default async function ParadaList({ searchParams, routeMode = false, canEdit = false }: Props) {
   const codigoRaw = normalizeParam(searchParams?.codigo);
   const status = normalizeParam(searchParams?.status);
   const municipio = normalizeParam(searchParams?.municipio);
@@ -208,6 +209,7 @@ export default async function ParadaList({ searchParams, routeMode = false }: Pr
       <ParadaTable
         paradas={paradas}
         routeMode={routeMode}
+        canEdit={canEdit}
         routeFilters={routeMode ? activeParams : undefined}
         pagination={
           routeMode
