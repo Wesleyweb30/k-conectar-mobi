@@ -1,0 +1,3 @@
+-- Removed "participante" role from the system. 
+-- Valid roles are now: visualizador, editor, owner
+-- Existing "participante" entries should be converted to "editor" manually if needed.

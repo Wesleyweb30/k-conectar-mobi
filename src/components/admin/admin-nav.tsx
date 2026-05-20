@@ -263,6 +263,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
             )}
           </div>
 
+          {navLink("/projetos", "Tarefas")}
           {navLink("/admin/usuarios", "Usuários")}
           <span className="text-sm text-gray-400">{userName}</span>
           <button
@@ -355,6 +356,16 @@ export default function AdminNav({ userName }: AdminNavProps) {
             ))}
 
             <p className="px-2 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Geral</p>
+            <Link
+              href="/projetos"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                pathname.startsWith("/projetos") ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
+              Tarefas
+            </Link>
             <Link
               href="/admin/usuarios"
               onClick={() => setMobileMenuOpen(false)}

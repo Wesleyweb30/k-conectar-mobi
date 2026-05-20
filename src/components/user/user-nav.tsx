@@ -26,7 +26,8 @@ export default function UserNav({ userName }: UserNavProps) {
   function navLink(href: string, label: string) {
     const isActive =
       pathname === href ||
-      (href === "/paradas" && pathname.startsWith("/paradas"));
+      (href === "/paradas" && pathname.startsWith("/paradas")) ||
+      (href === "/projetos" && pathname.startsWith("/projetos"));
 
     return (
       <Link
@@ -64,6 +65,7 @@ export default function UserNav({ userName }: UserNavProps) {
         {/* Desktop nav */}
         <div className="hidden items-center gap-2 md:flex md:gap-3">
           {navLink("/dashboard", "Início")}
+          {navLink("/projetos", "Projetos")}
           {navLink("/paradas", "Paradas")}
           {navLink("/paradas/mapa", "Mapa")}
           {navLink("/paradas/rotas", "Rotas")}
@@ -133,11 +135,15 @@ export default function UserNav({ userName }: UserNavProps) {
           <nav className="flex-1 overflow-y-auto p-4 space-y-1">
             {[
               { href: "/dashboard", label: "Início" },
+              { href: "/projetos", label: "Projetos" },
               { href: "/paradas", label: "Paradas" },
               { href: "/paradas/mapa", label: "Mapa" },
               { href: "/paradas/rotas", label: "Rotas" },
             ].map(({ href, label }) => {
-              const isActive = pathname === href || (href === "/paradas" && pathname.startsWith("/paradas"));
+              const isActive =
+                pathname === href ||
+                (href === "/paradas" && pathname.startsWith("/paradas")) ||
+                (href === "/projetos" && pathname.startsWith("/projetos"));
               return (
                 <Link
                   key={href}

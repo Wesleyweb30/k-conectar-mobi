@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "import:parada": "tsx prisma/import-parada.ts"
+    "import:parada": "tsx prisma/import-parada.ts",
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.7.0",
