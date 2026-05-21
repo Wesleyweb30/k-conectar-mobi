@@ -69,6 +69,9 @@ export default async function AdminHomePage() {
     totalParadas,
     paradasSemStatus,
     ultimoUpdateParada,
+    totalProjetos,
+    totalTarefas,
+    tarefasPorStatus,
   ] = await Promise.all([
     getProduttivoFormFillCount({
       startDate: todayApiDate,
@@ -105,6 +108,12 @@ export default async function AdminHomePage() {
       orderBy: { updatedAt: "desc" },
       select: { updatedAt: true },
     }),
+    prisma.projeto.count(),
+    prisma.tarefa.count(),
+    prisma.tarefa.groupBy({
+      by: ["status"],
+      _count: { _all: true },
+    }),
   ]);
 
   const totalAtividadesDiarias = manutencaoDiaria + implantacaoDiaria + eletricaDiaria + inspecaoDiaria;
@@ -130,6 +139,10 @@ export default async function AdminHomePage() {
   const paradasComStatus = Math.max(totalParadas - paradasSemStatus, 0);
   const statusCompletoPercent = totalParadas > 0 ? (paradasComStatus / totalParadas) * 100 : 0;
   const riskScore = Math.round(overduePercent * 0.7 + dueSoonPercent * 0.3);
+  const tarefasPendentes = tarefasPorStatus.find((item) => item.status === "pendente")?._count._all ?? 0;
+  const tarefasEmAndamento =
+    tarefasPorStatus.find((item) => item.status === "em_andamento")?._count._all ?? 0;
+  const tarefasConcluidas = tarefasPorStatus.find((item) => item.status === "concluida")?._count._all ?? 0;
 
   return (
     <div className="space-y-6 rounded-3xl bg-gradient-to-b from-slate-50 via-white to-cyan-50/30 p-2">
@@ -224,6 +237,44 @@ export default async function AdminHomePage() {
         <div className="rounded-2xl border border-violet-200 bg-violet-50/80 p-5 shadow-sm xl:col-span-12">
           <p className="text-xs uppercase tracking-wide text-violet-700">Total de operacoes do dia</p>
           <p className="mt-2 text-3xl font-bold leading-none text-violet-900">{formatNumber(totalAtividadesDiarias)}</p>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Projetos e tarefas</h2>
+            <p className="mt-1 text-sm text-slate-600">Panorama geral da frente de projetos.</p>
+          </div>
+          <Link
+            href="/projetos"
+            className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-800 transition hover:bg-violet-100"
+          >
+            Abrir tarefas
+          </Link>
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Projetos</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{formatNumber(totalProjetos)}</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Tarefas totais</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{formatNumber(totalTarefas)}</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-amber-700">A fazer</p>
+            <p className="mt-1 text-xl font-semibold text-amber-900">{formatNumber(tarefasPendentes)}</p>
+          </div>
+          <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-sky-700">Em andamento</p>
+            <p className="mt-1 text-xl font-semibold text-sky-900">{formatNumber(tarefasEmAndamento)}</p>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-emerald-700">Concluidas</p>
+            <p className="mt-1 text-xl font-semibold text-emerald-900">{formatNumber(tarefasConcluidas)}</p>
+          </div>
         </div>
       </section>
 
