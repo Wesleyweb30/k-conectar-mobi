@@ -32,6 +32,17 @@ function toApiDate(date: Date) {
   return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}/${date.getFullYear()}`;
 }
 
+function toDateKey(value?: string | Date | null) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function getDeadlineStatus(createdAt?: string | null, priority?: TicketPriorityKey) {
   if (!priority || priority === "all") return null;
   const limitDays = getPriorityDeadlineDays(priority);
@@ -65,6 +76,7 @@ export default async function AdminHomePage() {
     implantacaoDiaria,
     eletricaDiaria,
     inspecaoDiaria,
+    allTickets,
     pendingTickets,
     totalParadas,
     paradasSemStatus,
@@ -93,6 +105,7 @@ export default async function AdminHomePage() {
       endDate: todayApiDate,
       formId: FORM_ID_INSPECAO,
     }).catch(() => 0),
+    getAllProduttivoTickets(100).catch(() => []),
     getAllProduttivoTickets(100, "pending").catch(() => []),
     prisma.parada.count(),
     prisma.parada.count({
@@ -115,6 +128,11 @@ export default async function AdminHomePage() {
       _count: { _all: true },
     }),
   ]);
+
+  const todayKey = toDateKey(now);
+  const openedTodayCount = allTickets.filter(
+    (ticket) => toDateKey(ticket.created_at) === todayKey
+  ).length;
 
   const totalAtividadesDiarias = manutencaoDiaria + implantacaoDiaria + eletricaDiaria + inspecaoDiaria;
 
@@ -176,13 +194,13 @@ export default async function AdminHomePage() {
           className="rounded-2xl border border-rose-200 bg-gradient-to-br from-rose-50 via-white to-rose-100/70 p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md xl:col-span-4"
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs uppercase tracking-wide text-rose-700">Chamados diarios</p>
+            <p className="text-xs uppercase tracking-wide text-rose-700">Chamados abertos hoje</p>
             <span className="rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-rose-700">
               prioridade
             </span>
           </div>
-          <p className="mt-2 text-4xl font-bold leading-none text-rose-900">{formatNumber(pendingTickets.length)}</p>
-          <p className="mt-2 text-xs font-medium text-rose-800">Pendentes no backlog atual</p>
+          <p className="mt-2 text-4xl font-bold leading-none text-rose-900">{formatNumber(openedTodayCount)}</p>
+          <p className="mt-2 text-xs font-medium text-rose-800">Quantidade de chamados criados no dia</p>
 
           <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <span className="rounded-lg border border-rose-200 bg-rose-100/70 px-2 py-1 font-semibold text-rose-800">
