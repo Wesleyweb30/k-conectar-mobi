@@ -178,16 +178,10 @@ export function getProduttivoAccountMembers() {
 export async function getPedMapForItems(
     items: { work_id?: number | null }[]
 ): Promise<Record<number, string>> {
-    const ids = [...new Set(items.map((i) => i.work_id).filter((id): id is number => !!id))];
-    if (ids.length === 0) return {};
-    const works = await runWithConcurrency(ids, WORK_FETCH_CONCURRENCY, async (id) =>
-        getProduttivoWork(id).catch(() => null)
-    );
+    const workMetaMap = await getWorkMetaMapForItems(items);
     const map: Record<number, string> = {};
-    works.forEach((w) => {
-        if (!w) return;
-        const ped = extractPedFromTitle(w.title);
-        if (ped) map[w.id] = ped;
+    Object.entries(workMetaMap).forEach(([workId, meta]) => {
+        if (meta.ped) map[Number(workId)] = meta.ped;
     });
     return map;
 }
@@ -284,4 +278,32 @@ export function getProduttivoAttachmentUrl(fileUrl?: string | null): string | nu
 export function getProduttivoAttachmentProxyUrl(fileUrl?: string | null): string | null {
     if (!fileUrl) return null;
     return `/api/produttivo/attachment?fileUrl=${encodeURIComponent(fileUrl)}`;
+}
+
+export type ProduttivoWorkMeta = {
+    ped: string;
+    status?: string | null;
+};
+
+/** Busca works de uma lista de IDs e retorna mapa work_id → { ped, status } */
+export async function getWorkMetaMapForItems(
+    items: { work_id?: number | null }[]
+): Promise<Record<number, ProduttivoWorkMeta>> {
+    const ids = [...new Set(items.map((i) => i.work_id).filter((id): id is number => !!id))];
+    if (ids.length === 0) return {};
+
+    const works = await runWithConcurrency(ids, WORK_FETCH_CONCURRENCY, async (id) =>
+        getProduttivoWork(id).catch(() => null)
+    );
+
+    const map: Record<number, ProduttivoWorkMeta> = {};
+    works.forEach((w) => {
+        if (!w) return;
+        map[w.id] = {
+            ped: extractPedFromTitle(w.title) ?? "",
+            status: w.status ?? null,
+        };
+    });
+
+    return map;
 }

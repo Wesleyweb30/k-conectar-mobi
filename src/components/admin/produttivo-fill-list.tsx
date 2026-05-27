@@ -13,6 +13,8 @@ const PER_PAGE = 20;
 
 /** Mapa de work_id pra numero PED (ex.: { 10751500: "160444" }) */
 type PedMap = Record<number, string>;
+type WorkStatusMap = Record<number, string | null>;
+type WorkStatusFilter = "all" | "finished" | "started";
 
 type Props = {
   items: ProduttivoManutencaoItem[];
@@ -22,6 +24,8 @@ type Props = {
   preserveParams?: Record<string, string>;
   accentColor?: AccentColor;
   pedMap?: PedMap;
+  workStatusMap?: WorkStatusMap;
+  initialWorkStatusFilter?: WorkStatusFilter;
   idLabel?: string;
   preferFieldActivityId?: boolean;
   useLabelOnFallback?: boolean;
@@ -265,6 +269,42 @@ function isIsoDateTime(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value);
 }
 
+function normalizeStatus(value?: string | null): string {
+  return (value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getWorkProgressInfo(rawStatus?: string | null): {
+  label: "Em andamento" | "Finalizada";
+  classes: string;
+} {
+  const normalized = normalizeStatus(rawStatus);
+  const isFinalized = normalized === "finished";
+  const isStarted = normalized === "started";
+
+  if (isFinalized) {
+    return {
+      label: "Finalizada",
+      classes: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    };
+  }
+
+  if (isStarted) {
+    return {
+      label: "Em andamento",
+      classes: "border-amber-200 bg-amber-50 text-amber-700",
+    };
+  }
+
+  return {
+    label: "Em andamento",
+    classes: "border-slate-200 bg-slate-50 text-slate-600",
+  };
+}
+
 function FieldList({ fieldValues }: { fieldValues: ProduttivoFieldValue[] }) {
   const sorted = [...fieldValues.filter((fv) => fv.name && !shouldHideDetailField(fv.name))].sort(
     (a, b) => priorityIndex(a.name) - priorityIndex(b.name)
@@ -317,6 +357,8 @@ export default function ProduttivoFillList({
   preserveParams = {},
   accentColor = "amber",
   pedMap = {},
+  workStatusMap = {},
+  initialWorkStatusFilter = "all",
   idLabel = "PED",
   preferFieldActivityId = false,
   useLabelOnFallback = false,
@@ -328,6 +370,7 @@ export default function ProduttivoFillList({
 
   const [missingSignature, setMissingSignature] = useState(false);
   const [missingAdesivo, setMissingAdesivo] = useState(false);
+  const workStatusFilter = initialWorkStatusFilter;
 
   if (items.length === 0) {
     return (
@@ -337,7 +380,27 @@ export default function ProduttivoFillList({
     );
   }
 
+  const finishedCount = items.filter((item) => {
+    const normalizedWorkStatus = normalizeStatus(
+      item.work_id ? workStatusMap[item.work_id] ?? null : null,
+    );
+    return normalizedWorkStatus === "finished";
+  }).length;
+
+  const startedCount = items.filter((item) => {
+    const normalizedWorkStatus = normalizeStatus(
+      item.work_id ? workStatusMap[item.work_id] ?? null : null,
+    );
+    return normalizedWorkStatus === "started";
+  }).length;
+
   const filteredItems = items.filter((item) => {
+    const normalizedWorkStatus = normalizeStatus(
+      item.work_id ? workStatusMap[item.work_id] ?? null : null,
+    );
+
+    if (workStatusFilter === "finished" && normalizedWorkStatus !== "finished") return false;
+    if (workStatusFilter === "started" && normalizedWorkStatus !== "started") return false;
     if (missingSignature && getSignatureUrl(item.field_values) !== null) return false;
     if (missingAdesivo && getAdesivoStatus(item.field_values) === "conforme") return false;
     return true;
@@ -371,8 +434,52 @@ export default function ProduttivoFillList({
               <span className={`h-2 w-2 rounded-full ${missingAdesivo ? "bg-amber-500" : "bg-slate-300"}`} />
               Adesivo irregular
             </button>
-            {(missingSignature || missingAdesivo) && (
-              <button
+            <Link
+              href={buildHref(
+                basePath,
+                {
+                  ...preserveParams,
+                  workStatus: workStatusFilter === "finished" ? undefined : "finished",
+                },
+                1,
+              )}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                workStatusFilter === "finished"
+                  ? "border-emerald-400 bg-emerald-50 text-emerald-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${workStatusFilter === "finished" ? "bg-emerald-500" : "bg-slate-300"}`} />
+              Work finalizada ({finishedCount})
+            </Link>
+            <Link
+              href={buildHref(
+                basePath,
+                {
+                  ...preserveParams,
+                  workStatus: workStatusFilter === "started" ? undefined : "started",
+                },
+                1,
+              )}
+              className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
+                workStatusFilter === "started"
+                  ? "border-amber-400 bg-amber-50 text-amber-700"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full ${workStatusFilter === "started" ? "bg-amber-500" : "bg-slate-300"}`} />
+              Work em andamento ({startedCount})
+            </Link>
+            {(missingSignature || missingAdesivo || workStatusFilter !== "all") && (
+              <Link
+                href={buildHref(
+                  basePath,
+                  {
+                    ...preserveParams,
+                    workStatus: undefined,
+                  },
+                  1,
+                )}
                 onClick={() => {
                   setMissingSignature(false);
                   setMissingAdesivo(false);
@@ -380,7 +487,7 @@ export default function ProduttivoFillList({
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
               >
                 Limpar
-              </button>
+              </Link>
             )}
           </div>
 
@@ -414,6 +521,9 @@ export default function ProduttivoFillList({
           ? getImageUrlsFromFieldValues(item.field_values).slice(0, 4)
           : [];
 
+        const workStatus = item.work_id ? workStatusMap[item.work_id] ?? null : null;
+        const workProgress = getWorkProgressInfo(workStatus);
+
         const anteriorImage = showImages ? getNamedPhotoUrl(item.field_values, "anterior") : null;
         const posteriorImage = showImages ? getNamedPhotoUrl(item.field_values, "posterior") : null;
         const signatureImage = showImages ? getSignatureUrl(item.field_values) : null;
@@ -435,6 +545,9 @@ export default function ProduttivoFillList({
                       </span>
                       <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[11px] font-semibold text-slate-600">
                         {formatDate(item.created_at)}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${workProgress.classes}`}>
+                        Work: {workProgress.label}
                       </span>
                     </div>
                     <p className="mt-2 text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
@@ -644,6 +757,9 @@ export default function ProduttivoFillList({
                   {badgeText}
                 </span>
                 <span className="text-xs text-slate-500">{formatDate(item.created_at)}</span>
+                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${workProgress.classes}`}>
+                  Work: {workProgress.label}
+                </span>
               </div>
               <a
                 href={`https://app.produttivo.com.br/form_fills/${item.id}`}

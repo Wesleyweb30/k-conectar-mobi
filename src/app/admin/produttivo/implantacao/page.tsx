@@ -5,8 +5,8 @@ import {
   getProduttivoAccountMembers,
   getProduttivoFormFillCount,
   getProduttivoFormFills,
+  getWorkMetaMapForItems,
 } from "@/service/produttivo.service";
-import { getPedMapForItems } from "@/service/produttivo.service";
 import ProduttivoListFilters from "@/components/admin/produttivo-list-filters";
 import ProduttivoFillList from "@/components/admin/produttivo-fill-list";
 
@@ -21,6 +21,7 @@ type PageProps = {
     page?: string;
     pedSearch?: string;
     executorSearch?: string;
+    workStatus?: string;
   }>;
 };
 
@@ -54,6 +55,10 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   const page = params.page ? Math.max(1, parseInt(params.page, 10)) : 1;
   const pedSearch = params.pedSearch ?? "";
   const executorSearch = params.executorSearch ?? "";
+  const workStatusFilter =
+    params.workStatus === "finished" || params.workStatus === "started"
+      ? params.workStatus
+      : "all";
   const isSearching = !!(pedSearch || executorSearch);
 
   const apiStart = rawStart ? toApiDate(rawStart) : undefined;
@@ -86,7 +91,13 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   const total = response.meta?.count ?? 0;
   const members = membersResponse.results ?? [];
 
-  const pedMap = await getPedMapForItems(items);
+  const workMetaMap = await getWorkMetaMapForItems(items);
+  const pedMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.ped]),
+  );
+  const workStatusMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.status ?? null]),
+  ) as Record<number, string | null>;
 
   // Filtragem server-side para buscas globais (opera sobre todos os registros buscados)
   if (pedSearch) {
@@ -125,6 +136,7 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   if (params.userId) preserveParams.userId = params.userId;
   if (pedSearch) preserveParams.pedSearch = pedSearch;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
+  if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
 
   return (
     <div className="space-y-6">
@@ -247,6 +259,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
         preserveParams={preserveParams}
         accentColor="sky"
         pedMap={pedMap}
+        workStatusMap={workStatusMap}
+        initialWorkStatusFilter={workStatusFilter}
         idLabel="PED"
         preferFieldActivityId
         useLabelOnFallback

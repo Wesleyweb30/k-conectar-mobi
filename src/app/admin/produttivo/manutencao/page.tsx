@@ -4,8 +4,8 @@ import {
   getProduttivoAccountMembers,
   getProduttivoFormFillCount,
   getProduttivoFormFills,
+  getWorkMetaMapForItems,
 } from "@/service/produttivo.service";
-import { getPedMapForItems } from "@/service/produttivo.service";
 import ProduttivoFillList from "@/components/admin/produttivo-fill-list";
 import { buildHref } from "@/lib/url-search-params";
 import GoToRoutesButton from "@/components/parada/go-to-routes-button";
@@ -24,6 +24,7 @@ type PageProps = {
     pedSearch?: string;
     serviceSearch?: string;
     executorSearch?: string;
+    workStatus?: string;
   }>;
 };
 
@@ -94,6 +95,10 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   const pedSearch = params.pedSearch?.trim() ?? "";
   const serviceSearch = params.serviceSearch?.trim() ?? "";
   const executorSearch = params.executorSearch?.trim() ?? "";
+  const workStatusFilter =
+    params.workStatus === "finished" || params.workStatus === "started"
+      ? params.workStatus
+      : "all";
 
   const todayDate = getTodayInputDate();
   const effectiveStart = todayOnly ? todayDate : rawStart;
@@ -160,7 +165,10 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   const hasLocalTextFilters = Boolean(
     normalizedPedSearch || normalizedServiceSearch || normalizedExecutorSearch,
   );
-  const pedMapForFiltering = hasLocalTextFilters ? await getPedMapForItems(items) : {};
+  const workMetaMapForFiltering = hasLocalTextFilters ? await getWorkMetaMapForItems(items) : {};
+  const pedMapForFiltering = Object.fromEntries(
+    Object.entries(workMetaMapForFiltering).map(([workId, meta]) => [Number(workId), meta.ped]),
+  );
 
   const filteredItems = items.filter((item) => {
     if (normalizedPedSearch) {
@@ -198,7 +206,13 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   const listTotal = hasLocalTextFilters ? filteredTotal : total;
   const listPage = hasLocalTextFilters ? filteredPage : page;
 
-  const pedMap = hasLocalTextFilters ? pedMapForFiltering : await getPedMapForItems(listItems);
+  const workMetaMap = hasLocalTextFilters ? workMetaMapForFiltering : await getWorkMetaMapForItems(listItems);
+  const pedMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.ped]),
+  );
+  const workStatusMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.status ?? null]),
+  ) as Record<number, string | null>;
   const routePedCodes = Array.from(
     new Set(
       listItems
@@ -246,6 +260,7 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
   if (pedSearch) preserveParams.pedSearch = pedSearch;
   if (serviceSearch) preserveParams.serviceSearch = serviceSearch;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
+  if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
 
   return (
     <div className="space-y-5">
@@ -585,6 +600,8 @@ export default async function ManutencaoPage({ searchParams }: PageProps) {
           preserveParams={preserveParams}
           accentColor="amber"
           pedMap={pedMap}
+          workStatusMap={workStatusMap}
+          initialWorkStatusFilter={workStatusFilter}
           variant="feed"
           showImages
         />

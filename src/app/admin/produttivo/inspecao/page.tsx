@@ -4,7 +4,7 @@ import {
   getProduttivoAccountMembers,
   getProduttivoFormFillCount,
   getProduttivoFormFills,
-  getPedMapForItems,
+  getWorkMetaMapForItems,
 } from "@/service/produttivo.service";
 import ProduttivoFillList from "@/components/admin/produttivo-fill-list";
 import { buildHref } from "@/lib/url-search-params";
@@ -24,6 +24,7 @@ type PageProps = {
     pedSearch?: string;
     executorSearch?: string;
     situacaoSearch?: string;
+    workStatus?: string;
   }>;
 };
 
@@ -85,6 +86,10 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   const pedSearch = params.pedSearch?.trim() ?? "";
   const executorSearch = params.executorSearch?.trim() ?? "";
   const situacaoSearch = params.situacaoSearch?.trim() ?? "";
+  const workStatusFilter =
+    params.workStatus === "finished" || params.workStatus === "started"
+      ? params.workStatus
+      : "all";
 
   const todayDate = getTodayInputDate();
   const effectiveStart = todayOnly ? todayDate : rawStart;
@@ -145,7 +150,13 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   ];
 
   const items = hasTextFilters ? allFetchedItems : (response.results ?? []);
-  const pedMap = await getPedMapForItems(items);
+  const workMetaMap = await getWorkMetaMapForItems(items);
+  const pedMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.ped]),
+  );
+  const workStatusMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.status ?? null]),
+  ) as Record<number, string | null>;
 
   const normalizedPedSearch = normalizeText(pedSearch);
   const normalizedExecutorSearch = normalizeText(executorSearch);
@@ -187,7 +198,7 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   const listTotal = hasTextFilters ? filteredTotal : total;
   const listPage = hasTextFilters ? filteredPage : page;
 
-  const listPedMap = hasTextFilters ? await getPedMapForItems(listItems) : pedMap;
+  const listPedMap = pedMap;
 
   const routePedCodes = Array.from(
     new Set(
@@ -239,6 +250,7 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   if (pedSearch) preserveParams.pedSearch = pedSearch;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
   if (situacaoSearch) preserveParams.situacaoSearch = situacaoSearch;
+  if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
 
   return (
     <div className="space-y-5">
@@ -483,6 +495,8 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
         preserveParams={preserveParams}
         accentColor="sky"
         pedMap={listPedMap}
+        workStatusMap={workStatusMap}
+        initialWorkStatusFilter={workStatusFilter}
         idLabel="PED"
         preferFieldActivityId
         useLabelOnFallback

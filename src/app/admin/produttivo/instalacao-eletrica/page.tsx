@@ -4,7 +4,7 @@ import {
   getProduttivoAccountMembers,
   getProduttivoFormFillCount,
   getProduttivoFormFills,
-  getPedMapForItems,
+  getWorkMetaMapForItems,
 } from "@/service/produttivo.service";
 import ProduttivoFillList from "@/components/admin/produttivo-fill-list";
 import { buildHref } from "@/lib/url-search-params";
@@ -21,6 +21,7 @@ type PageProps = {
     userId?: string;
     page?: string;
     executorSearch?: string;
+    workStatus?: string;
   }>;
 };
 
@@ -78,6 +79,10 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   const userId = params.userId ? parseInt(params.userId, 10) : undefined;
   const page = params.page ? Math.max(1, parseInt(params.page, 10)) : 1;
   const executorSearch = params.executorSearch?.trim() ?? "";
+  const workStatusFilter =
+    params.workStatus === "finished" || params.workStatus === "started"
+      ? params.workStatus
+      : "all";
 
   const apiStart = rawStart ? toApiDate(rawStart) : undefined;
   const apiEnd = rawEnd ? toApiDate(rawEnd) : undefined;
@@ -158,7 +163,13 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   const listTotal = hasLocalTextFilters ? filteredTotal : total;
   const listPage = hasLocalTextFilters ? filteredPage : page;
 
-  const pedMap = await getPedMapForItems(listItems);
+  const workMetaMap = await getWorkMetaMapForItems(listItems);
+  const pedMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.ped]),
+  );
+  const workStatusMap = Object.fromEntries(
+    Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.status ?? null]),
+  ) as Record<number, string | null>;
 
   const monthData = monthRanges.map((m, i) => ({
     label: m.label,
@@ -187,6 +198,7 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   if (rawEnd) preserveParams.endDate = rawEnd;
   if (params.userId) preserveParams.userId = params.userId;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
+  if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
 
   const routePedCodes = Array.from(
     new Set(
@@ -467,6 +479,8 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
           preserveParams={preserveParams}
           accentColor="amber"
           pedMap={pedMap}
+          workStatusMap={workStatusMap}
+          initialWorkStatusFilter={workStatusFilter}
           variant="feed"
           showImages
         />

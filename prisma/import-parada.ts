@@ -4,8 +4,8 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import xlsx from "xlsx";
 
-const EXCEL_PATH = "doc/Parque.xlsx";
-const SHEET_NAME = "Parque";
+const EXCEL_PATH = "doc/Parque-2.xlsx";
+const SHEET_NAME = "Parque KALLAS";
 const BATCH_SIZE = 200;
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
