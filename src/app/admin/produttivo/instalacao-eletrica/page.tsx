@@ -22,6 +22,8 @@ type PageProps = {
     page?: string;
     executorSearch?: string;
     workStatus?: string;
+    quickMissingSignature?: string;
+    quickAdesivoIrregular?: string;
   }>;
 };
 
@@ -41,6 +43,10 @@ function normalizeText(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizeWorkStatus(value?: string | null): string {
+  return (value ?? "").toLowerCase().trim();
 }
 
 function getFieldTextByNameIncludes(
@@ -83,10 +89,17 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
     params.workStatus === "finished" || params.workStatus === "started"
       ? params.workStatus
       : "all";
+  const quickMissingSignature = params.quickMissingSignature === "1";
+  const quickAdesivoIrregular = params.quickAdesivoIrregular === "1";
 
   const apiStart = rawStart ? toApiDate(rawStart) : undefined;
   const apiEnd = rawEnd ? toApiDate(rawEnd) : undefined;
-  const hasTextFilters = Boolean(executorSearch);
+  const hasTextFilters = Boolean(
+    executorSearch
+    || workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular,
+  );
   const queryPage = hasTextFilters ? 1 : page;
   const queryPerPage = hasTextFilters ? 200 : PER_PAGE;
 
@@ -140,7 +153,10 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   const items = hasTextFilters ? allFetchedItems : (response.results ?? []);
 
   const normalizedExecutorSearch = normalizeText(executorSearch);
-  const hasLocalTextFilters = Boolean(normalizedExecutorSearch);
+  const normalizedWorkStatusFilter = normalizeWorkStatus(workStatusFilter);
+  const hasLocalTextFilters = Boolean(normalizedExecutorSearch || normalizedWorkStatusFilter);
+
+  const workMetaMapForFiltering = hasLocalTextFilters ? await getWorkMetaMapForItems(items) : {};
 
   const filteredItems = items.filter((item) => {
     if (normalizedExecutorSearch) {
@@ -148,6 +164,13 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
         getFieldTextByNameIncludes(item.field_values, "EXECUTOR"),
       );
       if (!executorValue.includes(normalizedExecutorSearch)) return false;
+    }
+
+    if (normalizedWorkStatusFilter && normalizedWorkStatusFilter !== "all") {
+      const workStatus = item.work_id
+        ? normalizeWorkStatus(workMetaMapForFiltering[item.work_id]?.status)
+        : "";
+      if (workStatus !== normalizedWorkStatusFilter) return false;
     }
 
     return true;
@@ -158,12 +181,34 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   const filteredPage = Math.min(page, filteredTotalPages);
   const filteredStart = (filteredPage - 1) * PER_PAGE;
   const pagedFilteredItems = filteredItems.slice(filteredStart, filteredStart + PER_PAGE);
+  const showAllForQuickOrStatus =
+    workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular;
 
-  const listItems = hasLocalTextFilters ? pagedFilteredItems : items;
-  const listTotal = hasLocalTextFilters ? filteredTotal : total;
-  const listPage = hasLocalTextFilters ? filteredPage : page;
+  const listItems = showAllForQuickOrStatus
+    ? filteredItems
+    : hasLocalTextFilters
+      ? pagedFilteredItems
+      : items;
+  const listTotal = showAllForQuickOrStatus
+    ? filteredTotal
+    : hasLocalTextFilters
+      ? filteredTotal
+      : total;
+  const listPage = showAllForQuickOrStatus
+    ? 1
+    : hasLocalTextFilters
+      ? filteredPage
+      : page;
 
-  const workMetaMap = await getWorkMetaMapForItems(listItems);
+  const workMetaMap = hasLocalTextFilters
+    ? Object.fromEntries(
+      Object.entries(workMetaMapForFiltering).filter(([workId]) =>
+        listItems.some((item) => item.work_id === Number(workId)),
+      ),
+    )
+    : await getWorkMetaMapForItems(listItems);
   const pedMap = Object.fromEntries(
     Object.entries(workMetaMap).map(([workId, meta]) => [Number(workId), meta.ped]),
   );
@@ -199,6 +244,8 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
   if (params.userId) preserveParams.userId = params.userId;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
   if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
+  if (quickMissingSignature) preserveParams.quickMissingSignature = "1";
+  if (quickAdesivoIrregular) preserveParams.quickAdesivoIrregular = "1";
 
   const routePedCodes = Array.from(
     new Set(
@@ -467,7 +514,7 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold text-slate-900">Lista de registros</h2>
           <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700">
-            Pagina {listPage}
+            {showAllForQuickOrStatus ? "Todos os resultados" : `Pagina ${listPage}`}
           </span>
         </div>
 
@@ -481,6 +528,9 @@ export default async function InstalacaoEletricaPage({ searchParams }: PageProps
           pedMap={pedMap}
           workStatusMap={workStatusMap}
           initialWorkStatusFilter={workStatusFilter}
+          initialMissingSignature={quickMissingSignature}
+          initialMissingAdesivo={quickAdesivoIrregular}
+          disablePagination={showAllForQuickOrStatus}
           variant="feed"
           showImages
         />

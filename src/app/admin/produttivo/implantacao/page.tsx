@@ -22,6 +22,8 @@ type PageProps = {
     pedSearch?: string;
     executorSearch?: string;
     workStatus?: string;
+    quickMissingSignature?: string;
+    quickAdesivoIrregular?: string;
   }>;
 };
 
@@ -29,6 +31,10 @@ type PageProps = {
 function toApiDate(d: string): string {
   const [y, m, day] = d.split("-");
   return `${day}/${m}/${y}`;
+}
+
+function normalizeWorkStatus(value?: string | null): string {
+  return (value ?? "").toLowerCase().trim();
 }
 
 /** Retorna intervalo DD/MM/YYYY + label para um mês relativo ao mês atual */
@@ -59,7 +65,15 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
     params.workStatus === "finished" || params.workStatus === "started"
       ? params.workStatus
       : "all";
-  const isSearching = !!(pedSearch || executorSearch);
+  const quickMissingSignature = params.quickMissingSignature === "1";
+  const quickAdesivoIrregular = params.quickAdesivoIrregular === "1";
+  const hasGlobalFilters = !!(
+    pedSearch
+    || executorSearch
+    || workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular
+  );
 
   const apiStart = rawStart ? toApiDate(rawStart) : undefined;
   const apiEnd = rawEnd ? toApiDate(rawEnd) : undefined;
@@ -73,8 +87,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
       startDate: apiStart,
       endDate: apiEnd,
       userId,
-      page: isSearching ? 1 : page,
-      perPage: isSearching ? 200 : PER_PAGE,
+      page: hasGlobalFilters ? 1 : page,
+      perPage: hasGlobalFilters ? 200 : PER_PAGE,
     }),
     getProduttivoAccountMembers().catch(() => ({ results: [] })),
     ...monthRanges.map((m) =>
@@ -87,7 +101,29 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
     ),
   ]);
 
-  let items = response.results ?? [];
+  const totalPagesFromApi = response.meta?.total_pages ?? 1;
+  const extraPages =
+    hasGlobalFilters && totalPagesFromApi > 1
+      ? await Promise.all(
+        Array.from({ length: totalPagesFromApi - 1 }, (_, index) => index + 2).map((apiPage) =>
+          getProduttivoFormFills({
+            formId: FORM_ID_IMPLANTACAO,
+            startDate: apiStart,
+            endDate: apiEnd,
+            userId,
+            page: apiPage,
+            perPage: 200,
+          }).catch(() => ({ results: [] })),
+        ),
+      )
+      : [];
+
+  let items = hasGlobalFilters
+    ? [
+      ...(response.results ?? []),
+      ...extraPages.flatMap((pageResponse) => pageResponse.results ?? []),
+    ]
+    : (response.results ?? []);
   const total = response.meta?.count ?? 0;
   const members = membersResponse.results ?? [];
 
@@ -121,7 +157,35 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
     });
   }
 
-  const displayTotal = isSearching ? items.length : total;
+  if (workStatusFilter !== "all") {
+    const normalizedFilter = normalizeWorkStatus(workStatusFilter);
+    items = items.filter((item) => {
+      const status = item.work_id ? normalizeWorkStatus(workStatusMap[item.work_id]) : "";
+      return status === normalizedFilter;
+    });
+  }
+
+  const filteredTotal = items.length;
+  const filteredTotalPages = Math.max(1, Math.ceil(filteredTotal / PER_PAGE));
+  const filteredPage = Math.min(page, filteredTotalPages);
+  const filteredStart = (filteredPage - 1) * PER_PAGE;
+  const pagedFilteredItems = items.slice(filteredStart, filteredStart + PER_PAGE);
+  const showAllForQuickOrStatus =
+    workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular;
+
+  const listItems = showAllForQuickOrStatus
+    ? items
+    : hasGlobalFilters
+      ? pagedFilteredItems
+      : items;
+  const displayTotal = hasGlobalFilters ? filteredTotal : total;
+  const listPage = showAllForQuickOrStatus
+    ? 1
+    : hasGlobalFilters
+      ? filteredPage
+      : page;
 
   const monthData = monthRanges.map((m, i) => ({
     label: m.label,
@@ -137,6 +201,8 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
   if (pedSearch) preserveParams.pedSearch = pedSearch;
   if (executorSearch) preserveParams.executorSearch = executorSearch;
   if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
+  if (quickMissingSignature) preserveParams.quickMissingSignature = "1";
+  if (quickAdesivoIrregular) preserveParams.quickAdesivoIrregular = "1";
 
   return (
     <div className="space-y-6">
@@ -218,7 +284,7 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
       </Suspense>
 
       {/* Aviso de filtro ativo */}
-      {(rawStart || rawEnd || userId || pedSearch || executorSearch) && (
+      {(rawStart || rawEnd || userId || pedSearch || executorSearch || workStatusFilter !== "all") && (
         <div className="rounded-xl border border-sky-100 bg-sky-50/50 px-4 py-2 text-sm text-sky-700">
           Filtrando por:{" "}
           {rawStart && rawEnd && (
@@ -242,9 +308,15 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
               <strong>Executor: &quot;{executorSearch}&quot;</strong>
             </>
           )}
-          {isSearching && (
+          {workStatusFilter !== "all" && (
+            <>
+              {" · "}
+              <strong>Work: {workStatusFilter === "finished" ? "Finalizada" : "Em andamento"}</strong>
+            </>
+          )}
+          {hasGlobalFilters && (
             <span className="ml-2 rounded-full bg-sky-200 px-2 py-0.5 text-[11px] font-semibold">
-              {items.length} resultado{items.length !== 1 ? "s" : ""} encontrado{items.length !== 1 ? "s" : ""}
+              {displayTotal} resultado{displayTotal !== 1 ? "s" : ""} encontrado{displayTotal !== 1 ? "s" : ""}
             </span>
           )}
         </div>
@@ -252,15 +324,18 @@ export default async function ImplantacaoPage({ searchParams }: PageProps) {
 
       {/* Lista */}
       <ProduttivoFillList
-        items={items}
+        items={listItems}
         total={displayTotal}
-        page={isSearching ? 1 : page}
+        page={listPage}
         basePath={BASE_PATH}
         preserveParams={preserveParams}
         accentColor="sky"
         pedMap={pedMap}
         workStatusMap={workStatusMap}
         initialWorkStatusFilter={workStatusFilter}
+        initialMissingSignature={quickMissingSignature}
+        initialMissingAdesivo={quickAdesivoIrregular}
+        disablePagination={showAllForQuickOrStatus}
         idLabel="PED"
         preferFieldActivityId
         useLabelOnFallback

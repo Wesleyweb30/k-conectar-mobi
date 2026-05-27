@@ -25,6 +25,8 @@ type PageProps = {
     executorSearch?: string;
     situacaoSearch?: string;
     workStatus?: string;
+    quickMissingSignature?: string;
+    quickAdesivoIrregular?: string;
   }>;
 };
 
@@ -47,6 +49,10 @@ function normalizeText(value?: string | null): string {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizeWorkStatus(value?: string | null): string {
+  return (value ?? "").toLowerCase().trim();
 }
 
 function getFieldTextByNameIncludes(
@@ -90,6 +96,8 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
     params.workStatus === "finished" || params.workStatus === "started"
       ? params.workStatus
       : "all";
+  const quickMissingSignature = params.quickMissingSignature === "1";
+  const quickAdesivoIrregular = params.quickAdesivoIrregular === "1";
 
   const todayDate = getTodayInputDate();
   const effectiveStart = todayOnly ? todayDate : rawStart;
@@ -97,7 +105,14 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
 
   const apiStart = effectiveStart ? toApiDate(effectiveStart) : undefined;
   const apiEnd = effectiveEnd ? toApiDate(effectiveEnd) : undefined;
-  const hasTextFilters = Boolean(pedSearch || executorSearch || situacaoSearch);
+  const hasTextFilters = Boolean(
+    pedSearch
+    || executorSearch
+    || situacaoSearch
+    || workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular,
+  );
   const queryPage = hasTextFilters ? 1 : page;
   const queryPerPage = hasTextFilters ? 200 : PER_PAGE;
 
@@ -161,6 +176,7 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   const normalizedPedSearch = normalizeText(pedSearch);
   const normalizedExecutorSearch = normalizeText(executorSearch);
   const normalizedSituacaoSearch = normalizeText(situacaoSearch);
+  const normalizedWorkStatusFilter = normalizeWorkStatus(workStatusFilter);
 
   const filteredItems = items.filter((item) => {
     if (normalizedPedSearch) {
@@ -185,6 +201,13 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
       if (!situacaoValue.includes(normalizedSituacaoSearch)) return false;
     }
 
+    if (normalizedWorkStatusFilter && normalizedWorkStatusFilter !== "all") {
+      const workStatus = item.work_id
+        ? normalizeWorkStatus(workMetaMap[item.work_id]?.status)
+        : "";
+      if (workStatus !== normalizedWorkStatusFilter) return false;
+    }
+
     return true;
   });
 
@@ -193,10 +216,26 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   const filteredPage = Math.min(page, filteredTotalPages);
   const filteredStart = (filteredPage - 1) * PER_PAGE;
   const pagedFilteredItems = filteredItems.slice(filteredStart, filteredStart + PER_PAGE);
+  const showAllForQuickOrStatus =
+    workStatusFilter !== "all"
+    || quickMissingSignature
+    || quickAdesivoIrregular;
 
-  const listItems = hasTextFilters ? pagedFilteredItems : items;
-  const listTotal = hasTextFilters ? filteredTotal : total;
-  const listPage = hasTextFilters ? filteredPage : page;
+  const listItems = showAllForQuickOrStatus
+    ? filteredItems
+    : hasTextFilters
+      ? pagedFilteredItems
+      : items;
+  const listTotal = showAllForQuickOrStatus
+    ? filteredTotal
+    : hasTextFilters
+      ? filteredTotal
+      : total;
+  const listPage = showAllForQuickOrStatus
+    ? 1
+    : hasTextFilters
+      ? filteredPage
+      : page;
 
   const listPedMap = pedMap;
 
@@ -251,6 +290,8 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
   if (executorSearch) preserveParams.executorSearch = executorSearch;
   if (situacaoSearch) preserveParams.situacaoSearch = situacaoSearch;
   if (workStatusFilter !== "all") preserveParams.workStatus = workStatusFilter;
+  if (quickMissingSignature) preserveParams.quickMissingSignature = "1";
+  if (quickAdesivoIrregular) preserveParams.quickAdesivoIrregular = "1";
 
   return (
     <div className="space-y-5">
@@ -497,6 +538,9 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
         pedMap={listPedMap}
         workStatusMap={workStatusMap}
         initialWorkStatusFilter={workStatusFilter}
+        initialMissingSignature={quickMissingSignature}
+        initialMissingAdesivo={quickAdesivoIrregular}
+        disablePagination={showAllForQuickOrStatus}
         idLabel="PED"
         preferFieldActivityId
         useLabelOnFallback
@@ -504,7 +548,8 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
         showImages
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] border border-slate-200/80 bg-white/90 px-4 py-4 text-sm text-slate-600 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.45)]">
+      {!showAllForQuickOrStatus && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.6rem] border border-slate-200/80 bg-white/90 px-4 py-4 text-sm text-slate-600 shadow-[0_16px_36px_-28px_rgba(15,23,42,0.45)]">
         <span className="font-medium text-slate-700">
           Pagina {listPage} de {Math.max(1, Math.ceil(listTotal / PER_PAGE))}
         </span>
@@ -537,7 +582,8 @@ export default async function InspecaoPage({ searchParams }: PageProps) {
             Proxima
           </Link>
         </div>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

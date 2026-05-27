@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
 import type { ProduttivoManutencaoItem, ProduttivoFieldValue } from "@/types/produttivo";
 import { extractPedFromFieldValues } from "@/lib/ped-extraction";
 import { buildHref } from "@/lib/url-search-params";
@@ -26,6 +25,9 @@ type Props = {
   pedMap?: PedMap;
   workStatusMap?: WorkStatusMap;
   initialWorkStatusFilter?: WorkStatusFilter;
+  initialMissingSignature?: boolean;
+  initialMissingAdesivo?: boolean;
+  disablePagination?: boolean;
   idLabel?: string;
   preferFieldActivityId?: boolean;
   useLabelOnFallback?: boolean;
@@ -359,6 +361,9 @@ export default function ProduttivoFillList({
   pedMap = {},
   workStatusMap = {},
   initialWorkStatusFilter = "all",
+  initialMissingSignature = false,
+  initialMissingAdesivo = false,
+  disablePagination = false,
   idLabel = "PED",
   preferFieldActivityId = false,
   useLabelOnFallback = false,
@@ -368,8 +373,8 @@ export default function ProduttivoFillList({
   const totalPages = Math.ceil(total / PER_PAGE);
   const styles = accentStyles[accentColor];
 
-  const [missingSignature, setMissingSignature] = useState(false);
-  const [missingAdesivo, setMissingAdesivo] = useState(false);
+  const missingSignature = initialMissingSignature;
+  const missingAdesivo = initialMissingAdesivo;
   const workStatusFilter = initialWorkStatusFilter;
 
   if (items.length === 0) {
@@ -394,6 +399,14 @@ export default function ProduttivoFillList({
     return normalizedWorkStatus === "started";
   }).length;
 
+  const missingSignatureCount = items.filter(
+    (item) => getSignatureUrl(item.field_values) === null,
+  ).length;
+
+  const irregularAdesivoCount = items.filter(
+    (item) => getAdesivoStatus(item.field_values) !== "conforme",
+  ).length;
+
   const filteredItems = items.filter((item) => {
     const normalizedWorkStatus = normalizeStatus(
       item.work_id ? workStatusMap[item.work_id] ?? null : null,
@@ -410,10 +423,24 @@ export default function ProduttivoFillList({
     <div className="space-y-3">
       {variant === "feed" && (
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Filtros rápidos</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Filtros rápidos</p>
+            {disablePagination && (
+              <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                Total pós-filtro: {filteredItems.length}
+              </span>
+            )}
+          </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setMissingSignature((v) => !v)}
+            <Link
+              href={buildHref(
+                basePath,
+                {
+                  ...preserveParams,
+                  quickMissingSignature: missingSignature ? undefined : "1",
+                },
+                1,
+              )}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                 missingSignature
                   ? "border-rose-400 bg-rose-50 text-rose-700"
@@ -421,10 +448,17 @@ export default function ProduttivoFillList({
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${missingSignature ? "bg-rose-500" : "bg-slate-300"}`} />
-              Falta assinatura
-            </button>
-            <button
-              onClick={() => setMissingAdesivo((v) => !v)}
+              Falta assinatura ({missingSignatureCount})
+            </Link>
+            <Link
+              href={buildHref(
+                basePath,
+                {
+                  ...preserveParams,
+                  quickAdesivoIrregular: missingAdesivo ? undefined : "1",
+                },
+                1,
+              )}
               className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition ${
                 missingAdesivo
                   ? "border-amber-400 bg-amber-50 text-amber-700"
@@ -432,8 +466,8 @@ export default function ProduttivoFillList({
               }`}
             >
               <span className={`h-2 w-2 rounded-full ${missingAdesivo ? "bg-amber-500" : "bg-slate-300"}`} />
-              Adesivo irregular
-            </button>
+              Adesivo irregular ({irregularAdesivoCount})
+            </Link>
             <Link
               href={buildHref(
                 basePath,
@@ -471,25 +505,66 @@ export default function ProduttivoFillList({
               Work em andamento ({startedCount})
             </Link>
             {(missingSignature || missingAdesivo || workStatusFilter !== "all") && (
-              <Link
+              <>
+                <Link
+                  href={buildHref(
+                    basePath,
+                    {
+                      ...preserveParams,
+                      quickMissingSignature: undefined,
+                      quickAdesivoIrregular: undefined,
+                    },
+                    1,
+                  )}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
+                >
+                  Limpar rápidos
+                </Link>
+                <Link
                 href={buildHref(
                   basePath,
                   {
-                    ...preserveParams,
                     workStatus: undefined,
+                    quickMissingSignature: undefined,
+                    quickAdesivoIrregular: undefined,
                   },
                   1,
                 )}
-                onClick={() => {
-                  setMissingSignature(false);
-                  setMissingAdesivo(false);
-                }}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-500 transition hover:bg-slate-50"
               >
-                Limpar
+                Limpar tudo
               </Link>
+              </>
             )}
           </div>
+
+          {(missingSignature || missingAdesivo || workStatusFilter !== "all") && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                Ativos:
+              </span>
+              {missingSignature && (
+                <span className="rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">
+                  Falta assinatura
+                </span>
+              )}
+              {missingAdesivo && (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  Adesivo irregular
+                </span>
+              )}
+              {workStatusFilter === "finished" && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                  Work finalizada
+                </span>
+              )}
+              {workStatusFilter === "started" && (
+                <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                  Work em andamento
+                </span>
+              )}
+            </div>
+          )}
 
           {filteredItems.length !== items.length && (
             <p className="mt-2 text-xs text-slate-500">
@@ -554,17 +629,32 @@ export default function ProduttivoFillList({
                       Registro #{item.document_number ?? item.id}
                     </p>
                   </div>
-                  <a
-                    href={`https://app.produttivo.com.br/form_fills/${item.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
-                  >
-                    Abrir no Produttivo
-                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                    </svg>
-                  </a>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    {item.work_id && (
+                      <a
+                        href={`https://app.produttivo.com.br/works/${item.work_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                      >
+                        Abrir Work
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </a>
+                    )}
+                    <a
+                      href={`https://app.produttivo.com.br/form_fills/${item.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
+                    >
+                      Abrir no Produttivo
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </div>
                 </div>
 
                 {showImages && (
@@ -761,17 +851,32 @@ export default function ProduttivoFillList({
                   Work: {workProgress.label}
                 </span>
               </div>
-              <a
-                href={`https://app.produttivo.com.br/form_fills/${item.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
-              >
-                Abrir no Produttivo
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+              <div className="flex flex-wrap items-center gap-2">
+                {item.work_id && (
+                  <a
+                    href={`https://app.produttivo.com.br/works/${item.work_id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                  >
+                    Abrir Work
+                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                )}
+                <a
+                  href={`https://app.produttivo.com.br/form_fills/${item.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-100 hover:text-slate-800"
+                >
+                  Abrir no Produttivo
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
             </div>
 
             {item.field_values.length > 0 && (
@@ -781,7 +886,7 @@ export default function ProduttivoFillList({
         );
       }))}
 
-      {totalPages > 1 && (
+      {!disablePagination && totalPages > 1 && (
         <div className="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <p className="text-xs text-slate-500">
             Pagina <strong>{page}</strong> de <strong>{totalPages}</strong> - {total} registros
@@ -836,7 +941,7 @@ export default function ProduttivoFillList({
         </div>
       )}
 
-      {totalPages <= 1 && (
+      {(disablePagination || totalPages <= 1) && (
         <p className="text-right text-xs text-slate-400">{total} registro{total !== 1 ? "s" : ""} encontrado{total !== 1 ? "s" : ""}</p>
       )}
     </div>

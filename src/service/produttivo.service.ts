@@ -30,7 +30,16 @@ const PRODUTTIVO_TIMEOUT_MS = 15000;
 const PRODUTTIVO_MAX_RETRIES = 2;
 const PRODUTTIVO_RETRY_BASE_DELAY_MS = 300;
 const TICKETS_PAGE_CONCURRENCY = 4;
-const WORK_FETCH_CONCURRENCY = 8;
+const WORK_FETCH_CONCURRENCY = 4;
+const WORK_META_TIMEOUT_MS = 6000;
+const WORK_META_MAX_RETRIES = 0;
+
+type ProduttivoGetOptions = {
+    timeoutMs?: number;
+    maxRetries?: number;
+    revalidateSeconds?: number;
+    logErrors?: boolean;
+};
 
 function wait(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,24 +83,28 @@ export function getProduttivoAuthHeaders(): Record<string, string> {
     };
 }
 
-export async function produttivoGet<T>(endpoint: string): Promise<T> {
+export async function produttivoGet<T>(endpoint: string, options?: ProduttivoGetOptions): Promise<T> {
     const url = `${process.env.PRODUTTIVO_BASE_URL}/${endpoint}`;
+    const timeoutMs = options?.timeoutMs ?? PRODUTTIVO_TIMEOUT_MS;
+    const maxRetries = options?.maxRetries ?? PRODUTTIVO_MAX_RETRIES;
+    const revalidateSeconds = options?.revalidateSeconds ?? 60;
+    const logErrors = options?.logErrors ?? true;
 
     let lastError: unknown;
 
-    for (let attempt = 0; attempt <= PRODUTTIVO_MAX_RETRIES; attempt += 1) {
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), PRODUTTIVO_TIMEOUT_MS);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         try {
             const res = await fetch(url, {
                 headers: getProduttivoAuthHeaders(),
-                next: { revalidate: 60 },
+                next: { revalidate: revalidateSeconds },
                 signal: controller.signal,
             });
 
             if (!res.ok) {
-                if (attempt < PRODUTTIVO_MAX_RETRIES && shouldRetryStatus(res.status)) {
+                if (attempt < maxRetries && shouldRetryStatus(res.status)) {
                     await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
                     continue;
                 }
@@ -108,12 +121,12 @@ export async function produttivoGet<T>(endpoint: string): Promise<T> {
                 "name" in error &&
                 (error as { name?: string }).name === "AbortError";
 
-            if (attempt < PRODUTTIVO_MAX_RETRIES && isAbortError) {
+            if (attempt < maxRetries && isAbortError) {
                 await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
                 continue;
             }
 
-            if (attempt >= PRODUTTIVO_MAX_RETRIES) {
+            if (attempt >= maxRetries) {
                 break;
             }
         } finally {
@@ -121,7 +134,9 @@ export async function produttivoGet<T>(endpoint: string): Promise<T> {
         }
     }
 
-    console.error("Erro inesperado ao consultar o Produttivo:", lastError);
+    if (logErrors) {
+        console.error("Erro inesperado ao consultar o Produttivo:", lastError);
+    }
     throw lastError instanceof Error ? lastError : new Error("Falha ao consultar o Produttivo");
 }
 
@@ -149,6 +164,15 @@ export function getProduttivoInspectionFills(params?: Pick<ProduttivoQueryParams
 
 export function getProduttivoWork(id: number) {
     return produttivoGet<ProduttivoWork>(`works/${id}`);
+}
+
+function getProduttivoWorkMeta(id: number) {
+    return produttivoGet<ProduttivoWork>(`works/${id}`, {
+        timeoutMs: WORK_META_TIMEOUT_MS,
+        maxRetries: WORK_META_MAX_RETRIES,
+        revalidateSeconds: 30,
+        logErrors: false,
+    });
 }
 
 export function getProduttivoFormFill(id: number) {
@@ -293,7 +317,7 @@ export async function getWorkMetaMapForItems(
     if (ids.length === 0) return {};
 
     const works = await runWithConcurrency(ids, WORK_FETCH_CONCURRENCY, async (id) =>
-        getProduttivoWork(id).catch(() => null)
+        getProduttivoWorkMeta(id).catch(() => null)
     );
 
     const map: Record<number, ProduttivoWorkMeta> = {};
