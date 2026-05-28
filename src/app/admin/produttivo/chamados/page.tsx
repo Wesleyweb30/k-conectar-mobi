@@ -8,16 +8,20 @@ import {
 import { formatShortDate, normalizeDateKey } from "@/lib/date-formatting";
 import {
   categoryBadgeClass,
-  getPriorityDeadlineDays,
-  getPriorityDeadlineLabel,
   getPriorityFromCategory,
   getTicketAgeDays,
   statusBadge,
   statusLabel,
-  type TicketPriorityKey as PriorityKey,
 } from "@/lib/ticket-priority";
 import { buildHref } from "@/lib/url-search-params";
 import GoToRoutesButton from "@/components/parada/go-to-routes-button";
+import {
+  extractTicketPed,
+  filterProduttivoTickets,
+  formatCategoryWithDeadline,
+  getDeadlineStatus,
+  normalizePedInput,
+} from "@/lib/produttivo-ticket-filters";
 
 const BASE_PATH = "/admin/produttivo/chamados";
 const PER_PAGE = 12;
@@ -34,85 +38,6 @@ type PageProps = {
     date?: string;
   }>;
 };
-
-function normalizePedInput(value?: string | null) {
-  if (!value) return "";
-  return value.replace(/\D/g, "").trim();
-}
-
-function extractTicketPed(ticket: { resource_place_name?: string | null }) {
-  return normalizePedInput(ticket.resource_place_name);
-}
-
-function ticketMatchesPed(ticket: { resource_place_name?: string | null; title?: string | null; description?: string | null }, ped: string) {
-  const sources = [ticket.resource_place_name, ticket.title, ticket.description];
-  return sources.some((source) => {
-    if (!source) return false;
-    return source.replace(/\D/g, "").includes(ped);
-  });
-}
-
-
-function formatCategoryWithDeadline(category?: string | null) {
-  const value = category?.trim() ?? "";
-  if (!value) return "Sem categoria";
-
-  const priority = getPriorityFromCategory(value);
-  const suffix = getPriorityDeadlineLabel(priority);
-  if (!suffix) return value;
-
-  return `${value} (${suffix})`;
-}
-
-function getDeadlineStatus(createdAt?: string | null, priority?: PriorityKey) {
-  if (!priority || priority === "all") return null;
-  const limitDays = getPriorityDeadlineDays(priority);
-  if (!limitDays) return null;
-
-  const ageDays = getTicketAgeDays(createdAt);
-  if (ageDays === null) return null;
-
-  const daysLeft = limitDays - ageDays;
-
-  if (daysLeft < 0) {
-    const overdueDays = Math.floor(Math.abs(daysLeft));
-    return {
-      state: "overdue" as const,
-      daysLeft: 0,
-      overdueDays,
-      label: `Atrasado ha ${overdueDays} dia(s)`,
-      bannerLabel: `Este chamado esta com atraso de ${overdueDays} dia(s) - solicite resposta da equipe de campo`,
-      badgeClass: "border-rose-300 bg-rose-100 text-rose-800",
-      bannerClass: "border-rose-200 bg-rose-50 text-rose-800",
-    };
-  }
-
-  const remaining = Math.ceil(daysLeft);
-
-  if (remaining <= 7) {
-    return {
-      state: "warning" as const,
-      daysLeft: remaining,
-      overdueDays: 0,
-      label: remaining <= 0 ? "Prazo no limite hoje" : `Vence em ${remaining} dia(s)`,
-      bannerLabel: remaining <= 0
-        ? "Prazo no limite hoje - acione a equipe de campo imediatamente"
-        : `Falta ${remaining} dia(s) para encerrar o prazo - atencao redobrada`,
-      badgeClass: "border-amber-300 bg-amber-100 text-amber-800",
-      bannerClass: "border-amber-200 bg-amber-50 text-amber-800",
-    };
-  }
-
-  return {
-    state: "info" as const,
-    daysLeft: remaining,
-    overdueDays: 0,
-    label: `Falta ${remaining} dia(s)`,
-    bannerLabel: `Falta ${remaining} dia(s) para encerrar o prazo`,
-    badgeClass: "border-sky-200 bg-sky-50 text-sky-700",
-    bannerClass: "border-sky-200 bg-sky-50 text-sky-700",
-  };
-}
 
 export default async function ProduttivoChamadosPage({ searchParams }: PageProps) {
   const params = (await searchParams) ?? {};
@@ -138,68 +63,20 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
       .filter((value): value is string => Boolean(value))
   )].sort((a, b) => a.localeCompare(b, "pt-BR"));
 
-  let filteredTickets = sortedTickets;
-
-  if (selectedTitle) {
-    const normalizedTitle = selectedTitle.toLocaleLowerCase("pt-BR");
-    filteredTickets = filteredTickets.filter((ticket) => {
-      const title = ticket.title?.toLocaleLowerCase("pt-BR") ?? "";
-      const description = ticket.description?.toLocaleLowerCase("pt-BR") ?? "";
-      return title.includes(normalizedTitle) || description.includes(normalizedTitle);
-    });
-  }
-
-  if (selectedPed) {
-    filteredTickets = filteredTickets.filter((ticket) => ticketMatchesPed(ticket, selectedPed));
-  }
-
-  if (selectedCategory) {
-    filteredTickets = filteredTickets.filter(
-      (ticket) => ticket.ticket_category_name === selectedCategory
-    );
-  }
-
-  if (selectedDate) {
-    filteredTickets = filteredTickets.filter(
-      (ticket) => normalizeDateKey(ticket.created_at) === selectedDate
-    );
-  }
-
-  const paradaCount = filteredTickets.reduce<Record<string, number>>((acc, ticket) => {
-    const parada = ticket.resource_place_name?.trim();
-    if (!parada) return acc;
-    acc[parada] = (acc[parada] ?? 0) + 1;
-    return acc;
-  }, {});
+  const { filteredTickets, paradaCount } = filterProduttivoTickets(sortedTickets, {
+    title: selectedTitle,
+    ped: selectedPed,
+    category: selectedCategory,
+    onlyDuplicated,
+    onlyOverdue,
+    parada: selectedParada,
+    date: selectedDate,
+  });
 
   const duplicatedParadas = Object.entries(paradaCount)
     .filter(([, count]) => count > 1)
     .map(([parada]) => parada)
     .sort((a, b) => a.localeCompare(b, "pt-BR"));
-
-  if (onlyDuplicated) {
-    filteredTickets = filteredTickets.filter((ticket) => {
-      const parada = ticket.resource_place_name?.trim();
-      return parada ? paradaCount[parada] > 1 : false;
-    });
-  }
-
-  if (selectedParada) {
-    filteredTickets = filteredTickets.filter((ticket) => {
-      const parada = ticket.resource_place_name?.trim() ?? "";
-      return parada === selectedParada;
-    });
-  }
-
-  if (onlyOverdue) {
-    filteredTickets = filteredTickets.filter((ticket) => {
-      const ticketPriority = getPriorityFromCategory(ticket.ticket_category_name);
-      const deadlineStatus = getDeadlineStatus(ticket.created_at, ticketPriority);
-      const status = (ticket.status ?? "").toLowerCase();
-      const isFinalized = status === "done" || status === "denied";
-      return deadlineStatus?.state === "overdue" && !isFinalized;
-    });
-  }
 
   const routePedCodes = Array.from(
     new Set(
@@ -247,6 +124,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
   if (onlyOverdue) preserveParams.onlyOverdue = "1";
   if (selectedParada) preserveParams.parada = selectedParada;
   if (selectedDate) preserveParams.date = selectedDate;
+  const exportHref = buildHref("/api/admin/produttivo/chamados/export", preserveParams);
 
   const activeFilterCount = [selectedTitle, selectedPed, selectedCategory, selectedParada, selectedDate, onlyDuplicated ? "1" : "", onlyOverdue ? "1" : ""]
     .filter(Boolean)
@@ -399,6 +277,12 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                       Nenhum PED encontrado para enviar a rotas
                     </span>
                   )}
+                  <Link
+                    href={exportHref}
+                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Exportar Chamado Para Excel
+                  </Link>
                   <button
                     type="submit"
                     className="shrink-0 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
