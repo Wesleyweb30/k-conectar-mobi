@@ -10,11 +10,49 @@ export type ProduttivoChamadosFilters = {
   title?: string;
   ped?: string;
   category?: string;
+  issue?: string;
   onlyDuplicated?: boolean;
   onlyOverdue?: boolean;
   parada?: string;
   date?: string;
 };
+
+export const ISSUE_SIGNAL_DEFINITIONS = [
+  {
+    key: "sem-equipamento",
+    label: "Sem equipamento",
+    accentClass: "border-rose-200 bg-rose-50 text-rose-800",
+    terms: ["sem equipamento", "sem abrigo", "sem cobertura", "ausencia de equipamento"],
+  },
+  {
+    key: "estrutura-avariada",
+    label: "Estrutura avariada",
+    accentClass: "border-amber-200 bg-amber-50 text-amber-800",
+    terms: ["quebrado", "danificado", "avariado", "estrutura", "vandalismo", "quebra"],
+  },
+  {
+    key: "limpeza-pichacao",
+    label: "Limpeza ou pichacao",
+    accentClass: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    terms: ["pichacao", "pixacao", "sujo", "limpeza", "sujeira", "lavagem"],
+  },
+  {
+    key: "iluminacao",
+    label: "Iluminacao",
+    accentClass: "border-sky-200 bg-sky-50 text-sky-800",
+    terms: ["iluminacao", "lampada", "luminaria", "escuro", "energia", "eletrica"],
+  },
+] as const;
+
+export const OTHER_ISSUE_SIGNAL = {
+  key: "outros",
+  label: "Outros problemas",
+  accentClass: "border-slate-200 bg-slate-100 text-slate-800",
+} as const;
+
+export type ProduttivoIssueSignalKey =
+  | typeof ISSUE_SIGNAL_DEFINITIONS[number]["key"]
+  | typeof OTHER_ISSUE_SIGNAL.key;
 
 export function normalizePedInput(value?: string | null) {
   if (!value) return "";
@@ -108,6 +146,24 @@ export function getDeadlineStatus(createdAt?: string | null, priority?: TicketPr
   };
 }
 
+export function classifyTicketIssueSignal(ticket: Pick<ProduttivoTicket, "title" | "description" | "ticket_category_name">): ProduttivoIssueSignalKey {
+  const haystack = [ticket.title, ticket.description, ticket.ticket_category_name]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("pt-BR");
+
+  const matchedDefinition = ISSUE_SIGNAL_DEFINITIONS.find((definition) =>
+    definition.terms.some((term) => haystack.includes(term)),
+  );
+
+  return matchedDefinition?.key ?? OTHER_ISSUE_SIGNAL.key;
+}
+
+export function isIssueSignalKey(value?: string | null): value is ProduttivoIssueSignalKey {
+  if (!value) return false;
+  return value === OTHER_ISSUE_SIGNAL.key || ISSUE_SIGNAL_DEFINITIONS.some((definition) => definition.key === value);
+}
+
 export function filterProduttivoTickets(
   tickets: ProduttivoTicket[],
   filters: ProduttivoChamadosFilters,
@@ -115,6 +171,7 @@ export function filterProduttivoTickets(
   const selectedTitle = filters.title?.trim() ?? "";
   const selectedPed = normalizePedInput(filters.ped);
   const selectedCategory = filters.category ?? "";
+  const selectedIssue = isIssueSignalKey(filters.issue) ? filters.issue : "";
   const onlyDuplicated = filters.onlyDuplicated === true;
   const onlyOverdue = filters.onlyOverdue === true;
   const selectedParada = filters.parada?.trim() ?? "";
@@ -144,6 +201,12 @@ export function filterProduttivoTickets(
   if (selectedDate) {
     filteredTickets = filteredTickets.filter(
       (ticket) => normalizeTicketDateKey(ticket.created_at) === selectedDate,
+    );
+  }
+
+  if (selectedIssue) {
+    filteredTickets = filteredTickets.filter(
+      (ticket) => classifyTicketIssueSignal(ticket) === selectedIssue,
     );
   }
 

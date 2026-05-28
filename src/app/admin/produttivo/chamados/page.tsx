@@ -16,15 +16,26 @@ import {
 import { buildHref } from "@/lib/url-search-params";
 import GoToRoutesButton from "@/components/parada/go-to-routes-button";
 import {
+  classifyTicketIssueSignal,
   extractTicketPed,
   filterProduttivoTickets,
   formatCategoryWithDeadline,
   getDeadlineStatus,
+  isIssueSignalKey,
+  ISSUE_SIGNAL_DEFINITIONS,
   normalizePedInput,
+  OTHER_ISSUE_SIGNAL,
 } from "@/lib/produttivo-ticket-filters";
 
 const BASE_PATH = "/admin/produttivo/chamados";
 const PER_PAGE = 12;
+
+function formatIssuePercent(value: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: value > 0 && value < 1 ? 1 : 0,
+    maximumFractionDigits: 1,
+  }).format(value);
+}
 
 type PageProps = {
   searchParams?: Promise<{
@@ -32,6 +43,7 @@ type PageProps = {
     title?: string;
     ped?: string;
     category?: string;
+    issue?: string;
     onlyDuplicated?: string;
     onlyOverdue?: string;
     parada?: string;
@@ -45,6 +57,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
   const selectedTitle = params.title?.trim() ?? "";
   const selectedPed = normalizePedInput(params.ped);
   const selectedCategory = params.category ?? "";
+  const selectedIssue = isIssueSignalKey(params.issue) ? params.issue : "";
   const onlyDuplicated = params.onlyDuplicated === "1";
   const onlyOverdue = params.onlyOverdue === "1";
   const selectedParada = params.parada?.trim() ?? "";
@@ -67,6 +80,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
     title: selectedTitle,
     ped: selectedPed,
     category: selectedCategory,
+    issue: selectedIssue,
     onlyDuplicated,
     onlyOverdue,
     parada: selectedParada,
@@ -110,6 +124,44 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
     return acc;
   }, {});
 
+  const issueCountMap = ISSUE_SIGNAL_DEFINITIONS.reduce<Record<string, number>>((acc, definition) => {
+    acc[definition.key] = 0;
+    return acc;
+  }, {});
+  let otherIssuesCount = 0;
+
+  filteredTickets.forEach((ticket) => {
+    const issueKey = classifyTicketIssueSignal(ticket);
+
+    if (issueKey !== OTHER_ISSUE_SIGNAL.key) {
+      issueCountMap[issueKey] += 1;
+      return;
+    }
+
+    otherIssuesCount += 1;
+  });
+
+  const classifiedIssueSummaries = ISSUE_SIGNAL_DEFINITIONS.map((definition) => ({
+    ...definition,
+    count: issueCountMap[definition.key] ?? 0,
+  }));
+
+  if (otherIssuesCount > 0) {
+    classifiedIssueSummaries.push({
+      ...OTHER_ISSUE_SIGNAL,
+      count: otherIssuesCount,
+    });
+  }
+
+  const topIssueSummaries = classifiedIssueSummaries
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "pt-BR"))
+    .filter((item) => item.count > 0)
+    .slice(0, 5);
+
+  const topCategories = Object.entries(categoryCountMap)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "pt-BR"))
+    .slice(0, 5);
+
   const totalFiltered = filteredTickets.length;
   const totalPages = Math.max(1, Math.ceil(totalFiltered / PER_PAGE));
   const currentPage = Math.min(requestedPage, totalPages);
@@ -120,13 +172,14 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
   if (selectedTitle) preserveParams.title = selectedTitle;
   if (selectedPed) preserveParams.ped = selectedPed;
   if (selectedCategory) preserveParams.category = selectedCategory;
+  if (selectedIssue) preserveParams.issue = selectedIssue;
   if (onlyDuplicated) preserveParams.onlyDuplicated = "1";
   if (onlyOverdue) preserveParams.onlyOverdue = "1";
   if (selectedParada) preserveParams.parada = selectedParada;
   if (selectedDate) preserveParams.date = selectedDate;
   const exportHref = buildHref("/api/admin/produttivo/chamados/export", preserveParams);
 
-  const activeFilterCount = [selectedTitle, selectedPed, selectedCategory, selectedParada, selectedDate, onlyDuplicated ? "1" : "", onlyOverdue ? "1" : ""]
+  const activeFilterCount = [selectedTitle, selectedPed, selectedCategory, selectedIssue, selectedParada, selectedDate, onlyDuplicated ? "1" : "", onlyOverdue ? "1" : ""]
     .filter(Boolean)
     .length;
   const showCompactDuplicatedPanel = duplicatedParadas.length > 9;
@@ -329,6 +382,11 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                     {formatShortDate(selectedDate)}
                   </span>
                 )}
+                {selectedIssue && (
+                  <span className="rounded-full border border-slate-300 bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-800">
+                    {classifiedIssueSummaries.find((item) => item.key === selectedIssue)?.label ?? "Informativo"}
+                  </span>
+                )}
                 {selectedParada && (
                   <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
                     {selectedParada}
@@ -399,6 +457,101 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
                 {warningInList} vencendo em ate 7 dias
               </span>
             )}
+          </div>
+        </section>
+      )}
+
+      {filteredTickets.length > 0 && (
+        <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Informativos da lista</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Leitura rapida dos principais problemas encontrados nos chamados filtrados.
+              </p>
+            </div>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+              Base atual: {filteredTickets.length} chamado(s)
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(260px,0.85fr)]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+              {topIssueSummaries.length > 0 ? topIssueSummaries.map((issue) => {
+                const percent = totalFiltered > 0 ? (issue.count / totalFiltered) * 100 : 0;
+                const isActive = selectedIssue === issue.key;
+                return (
+                  <Link
+                    key={issue.key}
+                    href={buildHref(BASE_PATH, {
+                      ...(selectedTitle ? { title: selectedTitle } : {}),
+                      ...(selectedPed ? { ped: selectedPed } : {}),
+                      ...(selectedCategory ? { category: selectedCategory } : {}),
+                      ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
+                      ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
+                      ...(selectedParada ? { parada: selectedParada } : {}),
+                      ...(selectedDate ? { date: selectedDate } : {}),
+                      ...(!isActive ? { issue: issue.key } : {}),
+                    })}
+                    className={`rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-sm ${isActive ? "border-slate-900 bg-slate-100 ring-2 ring-slate-300" : "border-slate-200 bg-slate-50"}`}
+                  >
+                    <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${issue.accentClass}`}>
+                      {issue.label}
+                    </span>
+                    <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900">{issue.count}</p>
+                    <p className="mt-1 text-sm text-slate-500">{formatIssuePercent(percent)}% da lista atual</p>
+                    <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {isActive ? "Clique para remover o filtro" : "Clique para filtrar os chamados"}
+                    </p>
+                  </Link>
+                );
+              }) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 sm:col-span-2 2xl:col-span-4">
+                  Nenhum problema recorrente foi detectado automaticamente pelos textos dos chamados atuais.
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-[linear-gradient(180deg,rgba(248,250,252,1),rgba(241,245,249,0.9))] p-4">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-slate-900">Categorias mais frequentes</h3>
+                <div className="flex items-center gap-2">
+                  {selectedIssue && (
+                    <Link
+                      href={buildHref(BASE_PATH, {
+                        ...(selectedTitle ? { title: selectedTitle } : {}),
+                        ...(selectedPed ? { ped: selectedPed } : {}),
+                        ...(selectedCategory ? { category: selectedCategory } : {}),
+                        ...(onlyDuplicated ? { onlyDuplicated: "1" } : {}),
+                        ...(onlyOverdue ? { onlyOverdue: "1" } : {}),
+                        ...(selectedParada ? { parada: selectedParada } : {}),
+                        ...(selectedDate ? { date: selectedDate } : {}),
+                      })}
+                      className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50"
+                    >
+                      Limpar informativo
+                    </Link>
+                  )}
+                  <span className="text-xs font-medium text-slate-500">Top 5</span>
+                </div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {topCategories.map(([category, count]) => {
+                  const width = totalFiltered > 0 ? Math.max(10, Math.round((count / totalFiltered) * 100)) : 0;
+                  return (
+                    <div key={category}>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium text-slate-700">{formatCategoryWithDeadline(category)}</span>
+                        <span className="text-slate-500">{count}</span>
+                      </div>
+                      <div className="mt-1 h-2 rounded-full bg-slate-200">
+                        <div className="h-2 rounded-full bg-slate-700" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </section>
       )}

@@ -37,6 +37,7 @@ export async function GET(request: Request) {
     title: searchParams.get("title") ?? undefined,
     ped: searchParams.get("ped") ?? undefined,
     category: searchParams.get("category") ?? undefined,
+    issue: searchParams.get("issue") ?? undefined,
     onlyDuplicated: searchParams.get("onlyDuplicated") === "1",
     onlyOverdue: searchParams.get("onlyOverdue") === "1",
     parada: searchParams.get("parada") ?? undefined,
