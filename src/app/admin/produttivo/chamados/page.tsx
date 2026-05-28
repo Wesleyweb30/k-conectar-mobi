@@ -25,6 +25,7 @@ import {
   ISSUE_SIGNAL_DEFINITIONS,
   normalizePedInput,
   OTHER_ISSUE_SIGNAL,
+  type ProduttivoIssueSummary,
 } from "@/lib/produttivo-ticket-filters";
 
 const BASE_PATH = "/admin/produttivo/chamados";
@@ -141,7 +142,7 @@ export default async function ProduttivoChamadosPage({ searchParams }: PageProps
     otherIssuesCount += 1;
   });
 
-  const classifiedIssueSummaries = ISSUE_SIGNAL_DEFINITIONS.map((definition) => ({
+  const classifiedIssueSummaries: ProduttivoIssueSummary[] = ISSUE_SIGNAL_DEFINITIONS.map((definition) => ({
     ...definition,
     count: issueCountMap[definition.key] ?? 0,
   }));

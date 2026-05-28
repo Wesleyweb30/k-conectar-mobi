@@ -1,4 +1,5 @@
 import {
+  getPriorityDeadlineDays,
   getPriorityDeadlineLabel,
   getPriorityFromCategory,
   getTicketAgeDays,
@@ -54,6 +55,13 @@ export type ProduttivoIssueSignalKey =
   | typeof ISSUE_SIGNAL_DEFINITIONS[number]["key"]
   | typeof OTHER_ISSUE_SIGNAL.key;
 
+export type ProduttivoIssueSummary = {
+  key: ProduttivoIssueSignalKey;
+  label: string;
+  accentClass: string;
+  count: number;
+};
+
 export function normalizePedInput(value?: string | null) {
   if (!value) return "";
   return value.replace(/\D/g, "").trim();
@@ -88,18 +96,13 @@ export function formatCategoryWithDeadline(category?: string | null) {
 export function getDeadlineStatus(createdAt?: string | null, priority?: TicketPriorityKey) {
   if (!priority || priority === "all") return null;
 
+  const limitDays = getPriorityDeadlineDays(priority);
+  if (!limitDays) return null;
+
   const ageDays = getTicketAgeDays(createdAt);
   if (ageDays === null) return null;
 
   const limitLabel = getPriorityDeadlineLabel(priority);
-  const limitDaysByPriority: Record<Exclude<TicketPriorityKey, "all">, number | null> = {
-    urgente: 7,
-    alta: 15,
-    media: 30,
-    baixa: 90,
-  };
-  const limitDays = limitDaysByPriority[priority];
-  if (!limitDays) return null;
 
   const daysLeft = limitDays - ageDays;
 
