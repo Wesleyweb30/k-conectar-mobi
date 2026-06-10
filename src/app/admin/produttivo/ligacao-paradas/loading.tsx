@@ -39,6 +39,28 @@ export default function LigacaoParadasLoading() {
           <div className="h-full w-1/2 animate-pulse rounded-full bg-cyan-500" />
         </div>
         <p className="mt-3 text-sm text-slate-600">Carregando resultados do radar...</p>
+        <p className="mt-1 text-xs text-slate-500">Quando houver muitos PEDs, pode levar mais tempo para concluir.</p>
+
+        <div className="mt-4 grid grid-cols-1 gap-2 text-xs text-slate-600 sm:grid-cols-3">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-cyan-500" />
+              1. Buscando paradas ativas
+            </span>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
+              2. Consultando manutencoes
+            </span>
+          </div>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="inline-flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              3. Montando lista final
+            </span>
+          </div>
+        </div>
 
         <div className="mt-4 space-y-2">
           <div className="h-10 animate-pulse rounded-lg bg-slate-100" />

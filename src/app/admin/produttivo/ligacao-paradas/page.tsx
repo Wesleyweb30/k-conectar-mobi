@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   FORM_ID_MANUTENCAO,
   getProduttivoFormFills,
+  getProduttivoAppBaseUrl,
   getProduttivoWork,
 } from "@/service/produttivo.service";
 import {
@@ -10,8 +11,14 @@ import {
   extractPedFromFieldValues,
   normalizePed,
 } from "@/lib/ped-extraction";
+import {
+  latestActivityCache,
+  workPedCache,
+  type LatestMaintenance,
+} from "@/lib/ligacao-paradas-cache";
 import { buildHref } from "@/lib/url-search-params";
 import RadarSearchFilters from "@/components/admin/radar-search-filters";
+import ExcelExportButton from "@/components/admin/excel-export-button";
 import type { ProduttivoManutencaoItem } from "@/types/produttivo";
 
 type PageProps = {
@@ -35,6 +42,7 @@ type ParadaAtiva = {
   status: string;
   tipologia: string;
   ultimaAtividadeEm: string | null;
+  ultimaAtividadeId: number | null;
   logradouro: string | null;
   quantidadeAbrigosTotens: number | null;
   tipologiaAtual: string | null;
@@ -69,9 +77,7 @@ const BASE_PATH = "/admin/produttivo/ligacao-paradas";
 const PRODUTTIVO_PER_PAGE = 100;
 const ACTIVITY_SCAN_MAX_PAGES = 40;
 const WORK_BATCH_SIZE = 20;
-
-const workPedCache = new Map<number, string | null>();
-const latestActivityCache = new Map<string, string | null>();
+const FORM_FETCH_BATCH_SIZE = 4;
 
 function normalizeInput(value?: string) {
   if (!value) return "";
@@ -170,7 +176,7 @@ async function resolvePedFromWorkId(workId: number): Promise<string | null> {
 async function getLatestActivityByPeds(
   peds: string[],
   forceRefresh: boolean
-): Promise<Map<string, string | null>> {
+): Promise<Map<string, LatestMaintenance | null>> {
   const normalized = [
     ...new Set(
       peds
@@ -183,43 +189,82 @@ async function getLatestActivityByPeds(
     normalized.filter((ped) => forceRefresh || !latestActivityCache.has(ped))
   );
 
-  for (let page = 1; page <= ACTIVITY_SCAN_MAX_PAGES && pending.size > 0; page += 1) {
-    const response = await getProduttivoFormFills({
-      formId: FORM_ID_MANUTENCAO,
-      page,
-      perPage: PRODUTTIVO_PER_PAGE,
-    }).catch(() => ({ results: [], meta: undefined }));
+  for (let pageStart = 1; pageStart <= ACTIVITY_SCAN_MAX_PAGES && pending.size > 0; pageStart += FORM_FETCH_BATCH_SIZE) {
+    const pages = Array.from(
+      { length: Math.min(FORM_FETCH_BATCH_SIZE, ACTIVITY_SCAN_MAX_PAGES - pageStart + 1) },
+      (_, idx) => pageStart + idx
+    );
 
-    const items: ProduttivoManutencaoItem[] = response.results ?? [];
-    if (items.length === 0) break;
+    const responses = await Promise.all(
+      pages.map((page) =>
+        getProduttivoFormFills({
+          formId: FORM_ID_MANUTENCAO,
+          page,
+          perPage: PRODUTTIVO_PER_PAGE,
+        }).catch(() => ({ results: [], meta: undefined }))
+      )
+    );
 
-    const workIds = items
-      .map((item) => item.work_id)
-      .filter((workId): workId is number => Boolean(workId));
+    let reachedEnd = false;
 
-    const uniqueWorkIds = [...new Set(workIds)];
-    for (let i = 0; i < uniqueWorkIds.length; i += WORK_BATCH_SIZE) {
-      const batch = uniqueWorkIds.slice(i, i + WORK_BATCH_SIZE);
-      await Promise.all(batch.map((id) => resolvePedFromWorkId(id)));
+    for (const response of responses) {
+      if (pending.size === 0) break;
+
+      const items: ProduttivoManutencaoItem[] = response.results ?? [];
+      if (items.length === 0) {
+        reachedEnd = true;
+        break;
+      }
+
+      const unresolvedWorkIds: number[] = [];
+      for (const item of items) {
+        const fromField = normalizePed(extractPedFromFieldValues(item.field_values));
+
+        if (fromField && pending.has(fromField)) {
+          latestActivityCache.set(fromField, {
+            id: item.id,
+            createdAt: item.created_at,
+          });
+          pending.delete(fromField);
+          continue;
+        }
+
+        if (!fromField && item.work_id) {
+          unresolvedWorkIds.push(item.work_id);
+        }
+      }
+
+      const uniqueWorkIds = [...new Set(unresolvedWorkIds)];
+      for (let i = 0; i < uniqueWorkIds.length; i += WORK_BATCH_SIZE) {
+        const batch = uniqueWorkIds.slice(i, i + WORK_BATCH_SIZE);
+        await Promise.all(batch.map((id) => resolvePedFromWorkId(id)));
+      }
+
+      for (const item of items) {
+        const fromField = normalizePed(extractPedFromFieldValues(item.field_values));
+        if (fromField) continue;
+
+        const fromWork = item.work_id ? (workPedCache.get(item.work_id) ?? null) : null;
+        const ped = fromWork;
+
+        if (!ped || !pending.has(ped)) continue;
+
+        latestActivityCache.set(ped, {
+          id: item.id,
+          createdAt: item.created_at,
+        });
+        pending.delete(ped);
+      }
     }
 
-    for (const item of items) {
-      const fromField = normalizePed(extractPedFromFieldValues(item.field_values));
-      const fromWork = item.work_id ? (workPedCache.get(item.work_id) ?? null) : null;
-      const ped = fromField ?? fromWork;
-
-      if (!ped || !pending.has(ped)) continue;
-
-      latestActivityCache.set(ped, item.created_at);
-      pending.delete(ped);
-    }
+    if (reachedEnd) break;
   }
 
   for (const ped of pending) {
     latestActivityCache.set(ped, null);
   }
 
-  const result = new Map<string, string | null>();
+  const result = new Map<string, LatestMaintenance | null>();
   for (const ped of normalized) {
     result.set(ped, latestActivityCache.get(ped) ?? null);
   }
@@ -228,6 +273,7 @@ async function getLatestActivityByPeds(
 }
 
 export default async function LigacaoParadasPage({ searchParams }: PageProps) {
+  const produttivoAppBaseUrl = getProduttivoAppBaseUrl();
   const params = (await searchParams) ?? {};
   const codigo = normalizeInput(params.codigo);
   const municipio = normalizeInput(params.municipio);
@@ -324,11 +370,11 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
 
     const latestByPed = allPeds.length > 0
       ? await getLatestActivityByPeds(allPeds, shouldRefresh)
-      : new Map<string, string | null>();
+      : new Map<string, LatestMaintenance | null>();
 
     const allItems: ParadaAtiva[] = allParadas.map((parada) => {
       const ped = normalizePed(parada.codigo);
-      const latest = ped ? latestByPed.get(ped) ?? null : null;
+      const latest = ped ? latestByPed.get(ped) : null;
       return {
         id: parada.id,
         codigo: parada.codigo,
@@ -336,7 +382,8 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
         bairro: parada.bairro ?? "Nao informado",
         status: parada.status ?? "Ativo",
         tipologia: parada.novaTipologia ?? "Nao informada",
-        ultimaAtividadeEm: latest,
+        ultimaAtividadeEm: latest?.createdAt ?? null,
+        ultimaAtividadeId: latest?.id ?? null,
         logradouro: parada.logradouro,
         quantidadeAbrigosTotens: parada.quantidadeAbrigosTotens,
         tipologiaAtual: parada.tipologiaAtual,
@@ -394,6 +441,14 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
   if (maintenanceFilter !== "all") preserveParams.manutencao = maintenanceFilter;
   if (legendas.length > 0) preserveParams.legenda = legendas;
   if (shouldRun) preserveParams.run = "1";
+
+  const exportParams: Record<string, string | string[]> = {};
+  if (codigo) exportParams.codigo = codigo;
+  if (municipio) exportParams.municipio = municipio;
+  if (bairro) exportParams.bairro = bairro;
+  if (maintenanceFilter !== "all") exportParams.manutencao = maintenanceFilter;
+  if (legendas.length > 0) exportParams.legenda = legendas;
+  const exportHref = buildHref("/api/admin/produttivo/ligacao-paradas/export", exportParams);
 
   const municipios = municipiosRows
     .map((item) => item.municipio)
@@ -471,7 +526,7 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
           </span>
         </div>
         {shouldRun && (
-          <div className="mt-3">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             {(() => {
               const refreshParams = new URLSearchParams();
               refreshParams.set("run", "1");
@@ -492,6 +547,13 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
                 </Link>
               );
             })()}
+
+            <ExcelExportButton
+              href={exportHref}
+              label="Exportar relatorio Excel"
+              loadingLabel="Gerando relatorio (pode demorar)..."
+              className="inline-flex items-center rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+            />
           </div>
         )}
       </div>
@@ -519,6 +581,7 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Municipio</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Bairro</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Ultima manutencao</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600">Link manutencao</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Criticidade</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Tipologia</th>
                 </tr>
@@ -526,12 +589,29 @@ export default async function LigacaoParadasPage({ searchParams }: PageProps) {
               <tbody className="divide-y divide-slate-100">
                 {pageItems.map((item) => {
                   const risk = getRiskInfo(item.ultimaAtividadeEm);
+                  const maintenanceUrl = item.ultimaAtividadeId
+                    ? `${produttivoAppBaseUrl}/form_fills/${item.ultimaAtividadeId}`
+                    : null;
                   return (
                     <tr key={item.id} className="hover:bg-slate-50/70">
                       <td className="px-4 py-3 font-semibold text-slate-800">{item.codigo}</td>
                       <td className="px-4 py-3 text-slate-700">{item.municipio}</td>
                       <td className="px-4 py-3 text-slate-700">{item.bairro}</td>
                       <td className="px-4 py-3 text-slate-700">{formatDateTime(item.ultimaAtividadeEm)}</td>
+                      <td className="px-4 py-3 text-slate-700">
+                        {maintenanceUrl ? (
+                          <a
+                            href={maintenanceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-medium text-cyan-700 underline-offset-2 hover:text-cyan-800 hover:underline"
+                          >
+                            Abrir no Produttivo
+                          </a>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${toneBadgeClass(risk.tone)}`}>
                           {risk.label}
