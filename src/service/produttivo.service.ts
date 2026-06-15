@@ -9,7 +9,8 @@ import type {
 import { extractPedFromTitle } from "@/lib/ped-extraction";
 export { extractPedFromTitle } from "@/lib/ped-extraction";
 
-export const FORM_ID_MANUTENCAO = 356263;
+export const FORM_ID_MANUTENCAO = 477013;
+export const FORM_ID_MANUTENCAO_LEGACY = 356263;
 export const FORM_ID_IMPLANTACAO = 485100;
 export const FORM_ID_INSTALACAO_ELETRICA = 443660;
 export const FORM_ID_INSPECAO = 356389;
@@ -43,6 +44,25 @@ type ProduttivoGetOptions = {
 
 function wait(ms: number) {
     return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function resolveFormIds(formId?: number): number[] | undefined {
+    if (formId === undefined) return undefined;
+    if (formId === FORM_ID_MANUTENCAO) {
+        return [FORM_ID_MANUTENCAO, FORM_ID_MANUTENCAO_LEGACY];
+    }
+    return [formId];
+}
+
+function appendFormIds(endpoint: string, formId?: number): string {
+    const formIds = resolveFormIds(formId);
+    if (!formIds?.length) return endpoint;
+
+    const formIdParams = formIds
+        .map((value) => `&form_fill[form_ids][]=${value}`)
+        .join("");
+
+    return `${endpoint}${formIdParams}`;
 }
 
 function shouldRetryStatus(status: number): boolean {
@@ -147,9 +167,13 @@ export async function getProduttivoFormFillsManutencao(
     const range = `${startDate} - ${endDate}`;
     const safePage = page && page > 0 ? page : 1;
     const safePerPage = perPage && perPage > 0 ? perPage : 20;
+    const endpoint = appendFormIds(
+        `form_fills?order_type=desc&range_time=${encodeURIComponent(range)}&form_fill[user_ids][]=${userId ?? ""}&form_fill[is_valid]=true&page=${safePage}&per_page=${safePerPage}`,
+        formId
+    );
 
     return produttivoGet<ProduttivoListResponse<ProduttivoManutencaoItem>>(
-        `form_fills?order_type=desc&range_time=${encodeURIComponent(range)}&form_fill[form_ids][]=${formId}&form_fill[user_ids][]=${userId ?? ""}&form_fill[is_valid]=true&page=${safePage}&per_page=${safePerPage}`
+        endpoint
     );
 }
 
@@ -188,8 +212,12 @@ export async function getProduttivoFormFillCount(params: {
     const { startDate, endDate, formId, userId } = params;
     const range = `${startDate} - ${endDate}`;
     const userPart = userId ? `&form_fill[user_ids][]=${userId}` : "";
+    const endpoint = appendFormIds(
+        `form_fills?order_type=desc&range_time=${encodeURIComponent(range)}${userPart}&page=1&per_page=1`,
+        formId
+    );
     const data = await produttivoGet<ProduttivoListResponse<ProduttivoManutencaoItem>>(
-        `form_fills?order_type=desc&range_time=${encodeURIComponent(range)}&form_fill[form_ids][]=${formId}${userPart}&page=1&per_page=1`
+        endpoint
     );
     return data.meta?.count ?? 0;
 }
@@ -222,7 +250,10 @@ export function getProduttivoFormFills(params: {
     const safePage = page > 0 ? page : 1;
     const safePerPage = perPage > 0 ? perPage : 20;
 
-    let endpoint = `form_fills?order_type=desc&form_fill[form_ids][]=${formId}&page=${safePage}&per_page=${safePerPage}`;
+    let endpoint = appendFormIds(
+        `form_fills?order_type=desc&page=${safePage}&per_page=${safePerPage}`,
+        formId
+    );
 
     if (startDate && endDate) {
         const range = `${startDate} - ${endDate}`;

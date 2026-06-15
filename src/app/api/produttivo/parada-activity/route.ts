@@ -6,6 +6,7 @@ import { searchWorksByPed } from "@/service/produttivo.service";
 const FORM_TYPES: Record<number, string> = {
   356389: "Inspeção",
   356263: "Manutenção",
+  477013: "Manutenção",
   485100: "Implementação",
   443660: "Instalação Elétrica",
 };
