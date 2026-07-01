@@ -54,7 +54,7 @@ export default function FormFillMediaUpload({
   const hiddenAttachmentIds = useMemo(() => {
     const existingIdsFromMedia = existingMedia
       .map((item) => item.attachmentId)
-      .filter((id): id is number => Number.isInteger(id) && id > 0);
+      .filter((id): id is number => typeof id === "number" && Number.isInteger(id) && id > 0);
     const existingIdsFromField = existingAttachmentIds
       .filter((id): id is number => Number.isInteger(id) && id > 0);
     const uploadedIds = uploadedMedia.map((item) => item.id);

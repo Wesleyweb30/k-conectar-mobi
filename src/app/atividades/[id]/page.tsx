@@ -86,7 +86,7 @@ export default async function AtividadeDetalhePage(props: {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
-      {isAdmin ? <AdminNav /> : <UserNav />}
+      {isAdmin ? <AdminNav userName={session.user.name} /> : <UserNav userName={session.user.name} />}
 
       <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">

@@ -403,6 +403,18 @@ function normalizeLocationValue(value: string): string {
   return trimmed;
 }
 
+function stripDiacritics(value: string): string {
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+function shouldRenderCollapsedField(fieldName: string): boolean {
+  const normalized = stripDiacritics(normalizeFieldKey(fieldName));
+
+  return normalized === "OUTROS TIPOS DE SERVICO"
+    || normalized === "PECAS SUBSTITUIDAS"
+    || normalized === "JUSTIFICATIVA DE SUBSTITUICAO";
+}
+
 function isStartServiceDateTimeField(field: EditableField): boolean {
   if (field.fieldKind !== "datetime") return false;
   const normalized = normalizeFieldKey(field.name);
@@ -634,112 +646,227 @@ export default async function PreenchimentoAtividadePage(props: {
                       const datetimeValue = toDateTimeLocalValue(field.value);
                       const canUseDateTimeInput = field.fieldKind === "datetime"
                         && (datetimeValue.length > 0 || field.value.trim().length === 0);
+                      const shouldCollapse = shouldRenderCollapsedField(field.name);
 
                       return (
-                        <label key={`${field.name}-${field.id ?? safeIndex}`} className="block space-y-2 rounded-lg border border-slate-200 bg-white p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm font-semibold text-slate-800">{field.name}</span>
-                            {field.mandatory ? (
-                              isFieldEmpty(field)
-                                ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Pendente</span>
-                                : <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Concluido</span>
-                            ) : null}
-                          </div>
-                          <input type="hidden" name={`field_id_${safeIndex}`} value={field.id ?? ""} />
-                          <input type="hidden" name={`field_name_${safeIndex}`} value={field.name} />
-                          <input type="hidden" name={`field_kind_${safeIndex}`} value={field.fieldKind} />
+                        <div key={`${field.name}-${field.id ?? safeIndex}`} className="rounded-lg border border-slate-200 bg-white p-3">
+                          {shouldCollapse ? (
+                            <details>
+                              <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+                                <span className="text-sm font-semibold text-slate-800">{field.name}</span>
+                                <div className="flex items-center gap-2">
+                                  {field.mandatory ? (
+                                    isFieldEmpty(field)
+                                      ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Pendente</span>
+                                      : <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Concluido</span>
+                                  ) : null}
+                                  <span className="text-xs font-medium text-slate-500">Expandir</span>
+                                </div>
+                              </summary>
+                              <div className="mt-3 space-y-2">
+                                <input type="hidden" name={`field_id_${safeIndex}`} value={field.id ?? ""} />
+                                <input type="hidden" name={`field_name_${safeIndex}`} value={field.name} />
+                                <input type="hidden" name={`field_kind_${safeIndex}`} value={field.fieldKind} />
 
-                          {field.fieldKind === "single_select" && field.options.length > 0 ? (
-                            <select
-                              id={inputId}
-                              name={`field_value_${safeIndex}`}
-                              defaultValue={field.value}
-                              className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
-                            >
-                              <option value="">Selecione</option>
-                              {field.options.map((option) => (
-                                <option key={option} value={option}>
-                                  {option}
-                                </option>
-                              ))}
-                            </select>
-                          ) : field.fieldKind === "multi_select" && field.options.length > 0 ? (
-                            <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
-                              {field.options.map((option) => (
-                                <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
-                                  <input
-                                    id={`${inputId}-${option}`}
-                                    type="checkbox"
+                                {field.fieldKind === "single_select" && field.options.length > 0 ? (
+                                  <select
+                                    id={inputId}
                                     name={`field_value_${safeIndex}`}
-                                    value={option}
-                                    defaultChecked={multiSelected.includes(option)}
-                                    className="h-4 w-4 rounded border-slate-300"
+                                    defaultValue={field.value}
+                                    className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                  >
+                                    <option value="">Selecione</option>
+                                    {field.options.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : field.fieldKind === "multi_select" && field.options.length > 0 ? (
+                                  <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                                    {field.options.map((option) => (
+                                      <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
+                                        <input
+                                          id={`${inputId}-${option}`}
+                                          type="checkbox"
+                                          name={`field_value_${safeIndex}`}
+                                          value={option}
+                                          defaultChecked={multiSelected.includes(option)}
+                                          className="h-4 w-4 rounded border-slate-300"
+                                        />
+                                        {option}
+                                      </label>
+                                    ))}
+                                  </div>
+                                ) : canUseDateTimeInput ? (
+                                  <div className="space-y-2">
+                                    <input
+                                      id={inputId}
+                                      name={`field_value_${safeIndex}`}
+                                      type="datetime-local"
+                                      defaultValue={datetimeValue}
+                                      step={60}
+                                      className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none ring-sky-200 focus:ring"
+                                    />
+                                    <p className="text-xs text-slate-500">Selecione data e hora no calendario para preencher mais rapido.</p>
+                                  </div>
+                                ) : field.fieldKind === "datetime" ? (
+                                  <div className="space-y-2">
+                                    <input
+                                      id={inputId}
+                                      name={`field_value_${safeIndex}`}
+                                      type="text"
+                                      defaultValue={field.value}
+                                      placeholder="Ex.: 01/07/2026 08:30"
+                                      className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                    />
+                                    <p className="text-xs text-slate-500">Nao foi possivel converter automaticamente o formato anterior. Ajuste a data e hora neste campo.</p>
+                                  </div>
+                                ) : field.hasMedia || field.fieldKind === "image" || field.fieldKind === "signature" ? (
+                                  <FormFillMediaUpload
+                                    fieldIndex={safeIndex}
+                                    fieldName={field.name}
+                                    fieldKind={field.fieldKind}
+                                    accountId={work.account_id}
+                                    existingAttachmentIds={field.mediaAttachmentIds}
+                                    inputId={inputId}
+                                    existingMedia={field.mediaUrls.map((url, mediaIndex) => ({
+                                      url,
+                                      attachmentId: field.mediaAttachmentIds[mediaIndex],
+                                    }))}
                                   />
-                                  {option}
-                                </label>
-                              ))}
-                            </div>
-                          ) : canUseDateTimeInput ? (
-                            <div className="space-y-2">
-                              <input
-                                id={inputId}
-                                name={`field_value_${safeIndex}`}
-                                type="datetime-local"
-                                defaultValue={datetimeValue}
-                                step={60}
-                                className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none ring-sky-200 focus:ring"
-                              />
-                              <p className="text-xs text-slate-500">Selecione data e hora no calendario para preencher mais rapido.</p>
-                            </div>
-                          ) : field.fieldKind === "datetime" ? (
-                            <div className="space-y-2">
-                              <input
-                                id={inputId}
-                                name={`field_value_${safeIndex}`}
-                                type="text"
-                                defaultValue={field.value}
-                                placeholder="Ex.: 01/07/2026 08:30"
-                                className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
-                              />
-                              <p className="text-xs text-slate-500">Nao foi possivel converter automaticamente o formato anterior. Ajuste a data e hora neste campo.</p>
-                            </div>
-                          ) : field.hasMedia || field.fieldKind === "image" || field.fieldKind === "signature" ? (
-                            <FormFillMediaUpload
-                              fieldIndex={safeIndex}
-                              fieldName={field.name}
-                              fieldKind={field.fieldKind}
-                              accountId={work.account_id}
-                              existingAttachmentIds={field.mediaAttachmentIds}
-                              inputId={inputId}
-                              existingMedia={field.mediaUrls.map((url, mediaIndex) => ({
-                                url,
-                                attachmentId: field.mediaAttachmentIds[mediaIndex],
-                              }))}
-                            />
-                          ) : field.fieldKind === "text" ? (
-                            <textarea
-                              id={inputId}
-                              name={`field_value_${safeIndex}`}
-                              defaultValue={field.value}
-                              rows={3}
-                              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
-                            />
-                          ) : field.fieldKind === "location" ? (
-                            <LocationFieldInput
-                              inputId={inputId}
-                              name={`field_value_${safeIndex}`}
-                              defaultValue={normalizeLocationValue(field.value)}
-                            />
+                                ) : field.fieldKind === "text" ? (
+                                  <textarea
+                                    id={inputId}
+                                    name={`field_value_${safeIndex}`}
+                                    defaultValue={field.value}
+                                    rows={3}
+                                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                  />
+                                ) : field.fieldKind === "location" ? (
+                                  <LocationFieldInput
+                                    inputId={inputId}
+                                    name={`field_value_${safeIndex}`}
+                                    defaultValue={normalizeLocationValue(field.value)}
+                                  />
+                                ) : (
+                                  <input
+                                    id={inputId}
+                                    name={`field_value_${safeIndex}`}
+                                    type="text"
+                                    defaultValue={field.value}
+                                    className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                  />
+                                )}
+                              </div>
+                            </details>
                           ) : (
-                            <input
-                              id={inputId}
-                              name={`field_value_${safeIndex}`}
-                              type="text"
-                              defaultValue={field.value}
-                              className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
-                            />
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-semibold text-slate-800">{field.name}</span>
+                                {field.mandatory ? (
+                                  isFieldEmpty(field)
+                                    ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">Pendente</span>
+                                    : <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">Concluido</span>
+                                ) : null}
+                              </div>
+                              <input type="hidden" name={`field_id_${safeIndex}`} value={field.id ?? ""} />
+                              <input type="hidden" name={`field_name_${safeIndex}`} value={field.name} />
+                              <input type="hidden" name={`field_kind_${safeIndex}`} value={field.fieldKind} />
+
+                              {field.fieldKind === "single_select" && field.options.length > 0 ? (
+                                <select
+                                  id={inputId}
+                                  name={`field_value_${safeIndex}`}
+                                  defaultValue={field.value}
+                                  className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                >
+                                  <option value="">Selecione</option>
+                                  {field.options.map((option) => (
+                                    <option key={option} value={option}>
+                                      {option}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : field.fieldKind === "multi_select" && field.options.length > 0 ? (
+                                <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
+                                  {field.options.map((option) => (
+                                    <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
+                                      <input
+                                        id={`${inputId}-${option}`}
+                                        type="checkbox"
+                                        name={`field_value_${safeIndex}`}
+                                        value={option}
+                                        defaultChecked={multiSelected.includes(option)}
+                                        className="h-4 w-4 rounded border-slate-300"
+                                      />
+                                      {option}
+                                    </label>
+                                  ))}
+                                </div>
+                              ) : canUseDateTimeInput ? (
+                                <div className="space-y-2">
+                                  <input
+                                    id={inputId}
+                                    name={`field_value_${safeIndex}`}
+                                    type="datetime-local"
+                                    defaultValue={datetimeValue}
+                                    step={60}
+                                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800 outline-none ring-sky-200 focus:ring"
+                                  />
+                                  <p className="text-xs text-slate-500">Selecione data e hora no calendario para preencher mais rapido.</p>
+                                </div>
+                              ) : field.fieldKind === "datetime" ? (
+                                <div className="space-y-2">
+                                  <input
+                                    id={inputId}
+                                    name={`field_value_${safeIndex}`}
+                                    type="text"
+                                    defaultValue={field.value}
+                                    placeholder="Ex.: 01/07/2026 08:30"
+                                    className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                  />
+                                  <p className="text-xs text-slate-500">Nao foi possivel converter automaticamente o formato anterior. Ajuste a data e hora neste campo.</p>
+                                </div>
+                              ) : field.hasMedia || field.fieldKind === "image" || field.fieldKind === "signature" ? (
+                                <FormFillMediaUpload
+                                  fieldIndex={safeIndex}
+                                  fieldName={field.name}
+                                  fieldKind={field.fieldKind}
+                                  accountId={work.account_id}
+                                  existingAttachmentIds={field.mediaAttachmentIds}
+                                  inputId={inputId}
+                                  existingMedia={field.mediaUrls.map((url, mediaIndex) => ({
+                                    url,
+                                    attachmentId: field.mediaAttachmentIds[mediaIndex],
+                                  }))}
+                                />
+                              ) : field.fieldKind === "text" ? (
+                                <textarea
+                                  id={inputId}
+                                  name={`field_value_${safeIndex}`}
+                                  defaultValue={field.value}
+                                  rows={3}
+                                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                />
+                              ) : field.fieldKind === "location" ? (
+                                <LocationFieldInput
+                                  inputId={inputId}
+                                  name={`field_value_${safeIndex}`}
+                                  defaultValue={normalizeLocationValue(field.value)}
+                                />
+                              ) : (
+                                <input
+                                  id={inputId}
+                                  name={`field_value_${safeIndex}`}
+                                  type="text"
+                                  defaultValue={field.value}
+                                  className="h-11 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none ring-sky-200 focus:ring"
+                                />
+                              )}
+                            </div>
                           )}
-                        </label>
+                        </div>
                       );
                     })}
                   </div>
