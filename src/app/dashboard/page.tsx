@@ -144,6 +144,12 @@ export default async function DashboardPage() {
 
           <div className="mt-4 grid grid-cols-1 gap-3">
             <Link
+              href="/dashboard/atividades"
+              className="rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-semibold text-cyan-800 transition hover:bg-cyan-100"
+            >
+              Consultar atividades manutenção (Produttivo)
+            </Link>
+            <Link
               href="/projetos"
               className="rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800 transition hover:bg-violet-100"
             >

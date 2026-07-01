@@ -264,6 +264,7 @@ export default function AdminNav({ userName }: AdminNavProps) {
           </div>
 
           {navLink("/projetos", "Tarefas")}
+          {navLink("/admin/atividades", "Atividades Manutenção")}
           {navLink("/admin/usuarios", "Usuários")}
           <span className="text-sm text-gray-400">{userName}</span>
           <button
@@ -365,6 +366,16 @@ export default function AdminNav({ userName }: AdminNavProps) {
             >
               <span className="h-2 w-2 shrink-0 rounded-full bg-sky-400" />
               Tarefas
+            </Link>
+            <Link
+              href="/admin/atividades"
+              onClick={() => setMobileMenuOpen(false)}
+              className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium transition-colors ${
+                pathname === "/admin/atividades" ? "bg-slate-100 text-slate-900" : "text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
+              Atividades Manutenção
             </Link>
             <Link
               href="/admin/usuarios"

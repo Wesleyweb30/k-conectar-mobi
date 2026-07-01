@@ -1,8 +1,13 @@
 import type {
     ProduttivoAccountMember,
+    ProduttivoFormDetail,
+    ProduttivoFormFill,
+    ProduttivoFormFillDetail,
+    ProduttivoForm,
     ProduttivoInspectionFill,
     ProduttivoListResponse,
     ProduttivoManutencaoItem,
+    ProduttivoResourcePlace,
     ProduttivoTicket,
     ProduttivoWork,
 } from "@/types/produttivo";
@@ -24,6 +29,26 @@ type ProduttivoQueryParams = {
     perPage?: number;
 };
 
+export type ProduttivoWorksQueryParams = {
+    q?: string;
+    page?: number;
+    orderType?: "asc" | "desc";
+    accountId?: number;
+    updatedAfter?: string;
+    includeTeamWorks?: boolean;
+    actives?: boolean;
+    statuses?: string[];
+    accountMemberIds?: number[];
+    formId?: number;
+    formIds?: number[];
+    resourcePlaceIds?: number[];
+    rootIds?: number[];
+    startedRangeTime?: string;
+    scheduledRangeTime?: string;
+    showTypeParam?: string;
+    perPage?: number;
+};
+
 const INSPECAO_ENDPOINT =
     "form_fills?order_type=desc&form_fill%5Bproject_ids%5D%5B%5D=251329&actives=true&account_id=166569";
 
@@ -40,6 +65,54 @@ type ProduttivoGetOptions = {
     maxRetries?: number;
     revalidateSeconds?: number;
     logErrors?: boolean;
+};
+
+type ProduttivoWriteOptions = {
+    timeoutMs?: number;
+    maxRetries?: number;
+    logErrors?: boolean;
+};
+
+export type ProduttivoCreateWorkPayload = {
+    account_id: number;
+    form_id: number;
+    title: string;
+    status?: "canceled" | "not_started" | "started" | "finished" | "reviewed";
+    details?: string;
+    resource_place_id?: number;
+    project_id?: number;
+    fills_goal?: number;
+    account_member_ids?: number[];
+    contact_name?: string;
+    contact_mobile_phone?: string;
+    contact_email?: string;
+};
+
+type ProduttivoCreateFormFillPayload = {
+    work_id: number;
+};
+
+type ProduttivoUpdateFormFillPayload = {
+    work_id?: number;
+    project_id?: number;
+    resource_id?: number;
+    field_values_attributes: Array<{
+        name: string;
+        value: string | string[] | null;
+        notes?: string | null;
+        attachment_ids?: number[];
+        accuracy?: number | null;
+        parts_attributes?: Array<{
+            part_id: number;
+            quantity: number;
+            unit_price?: number;
+        }>;
+        services_attributes?: Array<{
+            service_id: number;
+            quantity: number;
+            unit_price?: number;
+        }>;
+    }>;
 };
 
 function wait(ms: number) {
@@ -160,6 +233,234 @@ export async function produttivoGet<T>(endpoint: string, options?: ProduttivoGet
     throw lastError instanceof Error ? lastError : new Error("Falha ao consultar o Produttivo");
 }
 
+export async function produttivoPost<T>(
+    endpoint: string,
+    body: unknown,
+    options?: ProduttivoWriteOptions,
+): Promise<T> {
+    const url = `${process.env.PRODUTTIVO_BASE_URL}/${endpoint}`;
+    const timeoutMs = options?.timeoutMs ?? PRODUTTIVO_TIMEOUT_MS;
+    const maxRetries = options?.maxRetries ?? PRODUTTIVO_MAX_RETRIES;
+    const logErrors = options?.logErrors ?? true;
+
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const res = await fetch(url, {
+                method: "POST",
+                headers: {
+                    ...getProduttivoAuthHeaders(),
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify(body),
+                cache: "no-store",
+                signal: controller.signal,
+            });
+
+            if (!res.ok) {
+                if (attempt < maxRetries && shouldRetryStatus(res.status)) {
+                    await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                    continue;
+                }
+
+                let errorMessage = `Erro ao enviar dados para o Produttivo (status ${res.status})`;
+                try {
+                    const payload = (await res.json()) as { error?: unknown };
+                    if (typeof payload?.error === "string" && payload.error.trim()) {
+                        errorMessage = payload.error;
+                    }
+                } catch {
+                    // Ignora erro de parse do corpo de erro.
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const data = (await res.json()) as T;
+            return data;
+        } catch (error) {
+            lastError = error;
+            const isAbortError =
+                typeof error === "object" &&
+                error !== null &&
+                "name" in error &&
+                (error as { name?: string }).name === "AbortError";
+
+            if (attempt < maxRetries && isAbortError) {
+                await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                continue;
+            }
+
+            if (attempt >= maxRetries) {
+                break;
+            }
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    if (logErrors) {
+        console.error("Erro inesperado ao enviar dados ao Produttivo:", lastError);
+    }
+    throw lastError instanceof Error ? lastError : new Error("Falha ao enviar dados ao Produttivo");
+}
+
+export async function produttivoPatch<T>(
+    endpoint: string,
+    body: unknown,
+    options?: ProduttivoWriteOptions,
+): Promise<T> {
+    const url = `${process.env.PRODUTTIVO_BASE_URL}/${endpoint}`;
+    const timeoutMs = options?.timeoutMs ?? PRODUTTIVO_TIMEOUT_MS;
+    const maxRetries = options?.maxRetries ?? PRODUTTIVO_MAX_RETRIES;
+    const logErrors = options?.logErrors ?? true;
+
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const res = await fetch(url, {
+                method: "PATCH",
+                headers: {
+                    ...getProduttivoAuthHeaders(),
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify(body),
+                cache: "no-store",
+                signal: controller.signal,
+            });
+
+            if (!res.ok) {
+                if (attempt < maxRetries && shouldRetryStatus(res.status)) {
+                    await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                    continue;
+                }
+
+                let errorMessage = `Erro ao atualizar dados no Produttivo (status ${res.status})`;
+                try {
+                    const payload = (await res.json()) as { error?: unknown };
+                    if (typeof payload?.error === "string" && payload.error.trim()) {
+                        errorMessage = payload.error;
+                    }
+                } catch {
+                    // Ignora erro de parse do corpo de erro.
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const data = (await res.json()) as T;
+            return data;
+        } catch (error) {
+            lastError = error;
+            const isAbortError =
+                typeof error === "object" &&
+                error !== null &&
+                "name" in error &&
+                (error as { name?: string }).name === "AbortError";
+
+            if (attempt < maxRetries && isAbortError) {
+                await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                continue;
+            }
+
+            if (attempt >= maxRetries) {
+                break;
+            }
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    if (logErrors) {
+        console.error("Erro inesperado ao atualizar dados no Produttivo:", lastError);
+    }
+    throw lastError instanceof Error ? lastError : new Error("Falha ao atualizar dados no Produttivo");
+}
+
+export async function produttivoPut<T>(
+    endpoint: string,
+    body: unknown,
+    options?: ProduttivoWriteOptions,
+): Promise<T> {
+    const url = `${process.env.PRODUTTIVO_BASE_URL}/${endpoint}`;
+    const timeoutMs = options?.timeoutMs ?? PRODUTTIVO_TIMEOUT_MS;
+    const maxRetries = options?.maxRetries ?? PRODUTTIVO_MAX_RETRIES;
+    const logErrors = options?.logErrors ?? true;
+
+    let lastError: unknown;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+            const res = await fetch(url, {
+                method: "PUT",
+                headers: {
+                    ...getProduttivoAuthHeaders(),
+                    "content-type": "application/json",
+                },
+                body: JSON.stringify(body),
+                cache: "no-store",
+                signal: controller.signal,
+            });
+
+            if (!res.ok) {
+                if (attempt < maxRetries && shouldRetryStatus(res.status)) {
+                    await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                    continue;
+                }
+
+                let errorMessage = `Erro ao atualizar dados no Produttivo (status ${res.status})`;
+                try {
+                    const payload = (await res.json()) as { error?: unknown };
+                    if (typeof payload?.error === "string" && payload.error.trim()) {
+                        errorMessage = payload.error;
+                    }
+                } catch {
+                    // Ignora erro de parse do corpo de erro.
+                }
+
+                throw new Error(errorMessage);
+            }
+
+            const data = (await res.json()) as T;
+            return data;
+        } catch (error) {
+            lastError = error;
+            const isAbortError =
+                typeof error === "object" &&
+                error !== null &&
+                "name" in error &&
+                (error as { name?: string }).name === "AbortError";
+
+            if (attempt < maxRetries && isAbortError) {
+                await wait(PRODUTTIVO_RETRY_BASE_DELAY_MS * (attempt + 1));
+                continue;
+            }
+
+            if (attempt >= maxRetries) {
+                break;
+            }
+        } finally {
+            clearTimeout(timeoutId);
+        }
+    }
+
+    if (logErrors) {
+        console.error("Erro inesperado ao atualizar dados no Produttivo:", lastError);
+    }
+    throw lastError instanceof Error ? lastError : new Error("Falha ao atualizar dados no Produttivo");
+}
+
 export async function getProduttivoFormFillsManutencao(
     params?: ProduttivoQueryParams
 ): Promise<ProduttivoListResponse<ProduttivoManutencaoItem>> {
@@ -190,6 +491,59 @@ export function getProduttivoWork(id: number) {
     return produttivoGet<ProduttivoWork>(`works/${id}`);
 }
 
+export function createProduttivoWork(payload: ProduttivoCreateWorkPayload) {
+    return produttivoPost<ProduttivoWork>("works", { work: payload });
+}
+
+export function getProduttivoWorks(params?: ProduttivoWorksQueryParams) {
+    const sp = new URLSearchParams();
+
+    if (params?.q) sp.set("q", params.q);
+    if (params?.page && params.page > 0) sp.set("page", String(params.page));
+    if (params?.orderType) sp.set("order_type", params.orderType);
+    if (params?.accountId) sp.set("account_id", String(params.accountId));
+    if (params?.updatedAfter) sp.set("updated_after", params.updatedAfter);
+    if (params?.includeTeamWorks !== undefined) {
+        sp.set("include_team_works", String(params.includeTeamWorks));
+    }
+    if (params?.actives !== undefined) sp.set("actives", String(params.actives));
+    if (params?.statuses?.length) {
+        params.statuses.forEach((status) => {
+            if (status) sp.append("statuses[]", status);
+        });
+    }
+    if (params?.accountMemberIds?.length) {
+        params.accountMemberIds.forEach((id) => {
+            if (id > 0) sp.append("account_member_ids[]", String(id));
+        });
+    }
+    if (params?.formId) sp.set("form_id", String(params.formId));
+    if (params?.formIds?.length) {
+        params.formIds.forEach((id) => {
+            if (id > 0) sp.append("form_ids[]", String(id));
+        });
+    }
+    if (params?.resourcePlaceIds?.length) {
+        params.resourcePlaceIds.forEach((id) => {
+            if (id > 0) sp.append("resource_place_ids[]", String(id));
+        });
+    }
+    if (params?.rootIds?.length) {
+        params.rootIds.forEach((id) => {
+            if (id > 0) sp.append("root_ids[]", String(id));
+        });
+    }
+    if (params?.startedRangeTime) sp.set("started_range_time", params.startedRangeTime);
+    if (params?.scheduledRangeTime) sp.set("scheduled_range_time", params.scheduledRangeTime);
+    if (params?.showTypeParam) sp.set("show_type_param", params.showTypeParam);
+    if (params?.perPage && params.perPage > 0) sp.set("per_page", String(params.perPage));
+
+    const query = sp.toString();
+    const endpoint = query ? `works?${query}` : "works";
+
+    return produttivoGet<ProduttivoListResponse<ProduttivoWork>>(endpoint);
+}
+
 function getProduttivoWorkMeta(id: number) {
     return produttivoGet<ProduttivoWork>(`works/${id}`, {
         timeoutMs: WORK_META_TIMEOUT_MS,
@@ -200,7 +554,21 @@ function getProduttivoWorkMeta(id: number) {
 }
 
 export function getProduttivoFormFill(id: number) {
-    return produttivoGet<Record<string, unknown>>(`form_fills/${id}`);
+    return produttivoGet<ProduttivoFormFillDetail>(`form_fills/${id}`);
+}
+
+export function createProduttivoFormFill(payload: ProduttivoCreateFormFillPayload) {
+    return produttivoPost<ProduttivoFormFill>("form_fills", { form_fill: payload });
+}
+
+export function updateProduttivoFormFill(id: number, payload: ProduttivoUpdateFormFillPayload) {
+    return produttivoPut<ProduttivoFormFillDetail>(`form_fills/${id}`, { form_fill: payload });
+}
+
+export async function getLatestProduttivoFormFillByWorkId(workId: number): Promise<ProduttivoFormFill | null> {
+    const endpoint = `form_fills?order_type=desc&form_fill[work_ids][]=${workId}&page=1&per_page=1`;
+    const response = await produttivoGet<ProduttivoListResponse<ProduttivoFormFill>>(endpoint);
+    return response.results?.[0] ?? null;
 }
 
 export async function getProduttivoFormFillCount(params: {
@@ -224,6 +592,62 @@ export async function getProduttivoFormFillCount(params: {
 
 export function getProduttivoAccountMembers() {
     return produttivoGet<ProduttivoListResponse<ProduttivoAccountMember>>("account_members?per_page=100");
+}
+
+export function getProduttivoForms(params?: {
+    q?: string;
+    page?: number;
+    accountId?: number;
+    updatedAfter?: string;
+    actives?: boolean;
+    perPage?: number;
+}) {
+    const sp = new URLSearchParams();
+
+    if (params?.q) sp.set("q", params.q);
+    if (params?.page && params.page > 0) sp.set("page", String(params.page));
+    if (params?.accountId) sp.set("account_id", String(params.accountId));
+    if (params?.updatedAfter) sp.set("updated_after", params.updatedAfter);
+    if (params?.actives !== undefined) sp.set("actives", String(params.actives));
+    if (params?.perPage && params.perPage > 0) sp.set("per_page", String(params.perPage));
+
+    const query = sp.toString();
+    const endpoint = query ? `forms?${query}` : "forms";
+
+    return produttivoGet<ProduttivoListResponse<ProduttivoForm>>(endpoint);
+}
+
+export function getProduttivoForm(id: number) {
+    return produttivoGet<ProduttivoFormDetail>(`forms/${id}`);
+}
+
+export function getProduttivoResourcePlaces(params?: {
+    q?: string;
+    page?: number;
+    accountId?: number;
+    updatedAfter?: string;
+    viewMode?: "Customer" | "Place" | "Resource";
+    actives?: boolean;
+    perPage?: number;
+}) {
+    const sp = new URLSearchParams();
+
+    if (params?.q) sp.set("q", params.q);
+    if (params?.page && params.page > 0) sp.set("page", String(params.page));
+    if (params?.accountId) sp.set("account_id", String(params.accountId));
+    if (params?.updatedAfter) sp.set("updated_after", params.updatedAfter);
+    if (params?.viewMode) sp.set("view_mode", params.viewMode);
+    if (params?.actives !== undefined) sp.set("actives", String(params.actives));
+    if (params?.perPage && params.perPage > 0) sp.set("per_page", String(params.perPage));
+
+    const query = sp.toString();
+    const endpoint = query ? `resource_places?${query}` : "resource_places";
+
+    return produttivoGet<ProduttivoListResponse<ProduttivoResourcePlace>>(endpoint);
+}
+
+export function getProduttivoResourcePlace(id: number) {
+    return produttivoGet<ProduttivoResourcePlace>(`resource_places/${id}`);
 }
 
 /** Busca works de uma lista de IDs e retorna mapa work_id → PED */
@@ -322,6 +746,14 @@ export function getProduttivoAppBaseUrl(): string {
 
 export function getProduttivoTicketAppUrl(id: number): string {
     return `${getProduttivoAppBaseUrl()}/tickets/${id}`;
+}
+
+export function getProduttivoWorkAppUrl(id: number): string {
+    return `${getProduttivoAppBaseUrl()}/works/${id}`;
+}
+
+export function getProduttivoFormFillAppUrl(id: number): string {
+    return `${getProduttivoAppBaseUrl()}/form_fills/${id}`;
 }
 
 export function getProduttivoAttachmentUrl(fileUrl?: string | null): string | null {
