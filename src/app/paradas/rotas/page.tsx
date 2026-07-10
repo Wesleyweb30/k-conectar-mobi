@@ -25,12 +25,12 @@ export default async function RotasPage({ searchParams }: RotasPageProps) {
   }
 
   const resolvedSearchParams = (await searchParams) ?? {};
-  const isAdmin = session.user.role === "admin";
+  const isPrivileged = session.user.role === "admin" || session.user.role === "gestor";
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(20,184,166,0.12),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.1),_transparent_26%),linear-gradient(180deg,_#f8fafc,_#eef6f7)]">
-      {isAdmin ? (
-        <AdminNav userName={session.user.name} />
+      {isPrivileged ? (
+        <AdminNav userName={session.user.name} userRole={session.user.role ?? undefined} />
       ) : (
         <UserNav userName={session.user.name} />
       )}

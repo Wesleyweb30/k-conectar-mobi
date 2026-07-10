@@ -26,16 +26,17 @@ export default async function ParadasPage({ searchParams }: ParadasPageProps) {
 
   const resolvedSearchParams = (await searchParams) ?? {};
   const isAdmin = session.user.role === "admin";
+  const isPrivileged = isAdmin || session.user.role === "gestor";
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.08),_transparent_24%),radial-gradient(circle_at_top_right,_rgba(6,182,212,0.12),_transparent_28%),linear-gradient(180deg,_#f8fafc,_#eef2f7)]">
-      {isAdmin ? (
-        <AdminNav userName={session.user.name} />
+      {isPrivileged ? (
+        <AdminNav userName={session.user.name} userRole={session.user.role ?? undefined} />
       ) : (
         <UserNav userName={session.user.name} />
       )}
 
-      <main className={`${isAdmin ? "max-w-6xl" : "max-w-5xl"} mx-auto px-4 py-8 md:py-10`}>
+      <main className={`${isPrivileged ? "max-w-6xl" : "max-w-5xl"} mx-auto px-4 py-8 md:py-10`}>
         <ParadaList searchParams={resolvedSearchParams} canEdit={isAdmin} />
       </main>
     </div>

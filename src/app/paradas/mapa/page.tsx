@@ -40,6 +40,7 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
   }
 
   const isAdmin = session.user.role === "admin";
+  const isPrivileged = isAdmin || session.user.role === "gestor";
   const resolvedSearchParams = (await searchParams) ?? {};
   const codigo = normalizeParam(resolvedSearchParams.codigo);
   const status = normalizeParam(resolvedSearchParams.status);
@@ -132,8 +133,8 @@ export default async function ParadasMapaPage({ searchParams }: MapaPageProps) {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.12),_transparent_26%),radial-gradient(circle_at_top_right,_rgba(34,197,94,0.1),_transparent_28%),linear-gradient(180deg,_#f8fafc,_#eef2f7)]">
-      {isAdmin ? (
-        <AdminNav userName={session.user.name} />
+      {isPrivileged ? (
+        <AdminNav userName={session.user.name} userRole={session.user.role ?? undefined} />
       ) : (
         <UserNav userName={session.user.name} />
       )}
