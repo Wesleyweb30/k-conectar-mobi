@@ -97,6 +97,8 @@ type ProduttivoUpdateFormFillPayload = {
     project_id?: number;
     resource_id?: number;
     field_values_attributes: Array<{
+        field_id?: number;
+        field_option_ids?: number[];
         name: string;
         value: string | string[] | null;
         notes?: string | null;
@@ -554,7 +556,9 @@ function getProduttivoWorkMeta(id: number) {
 }
 
 export function getProduttivoFormFill(id: number) {
-    return produttivoGet<ProduttivoFormFillDetail>(`form_fills/${id}`);
+    return produttivoGet<ProduttivoFormFillDetail>(`form_fills/${id}`, {
+        revalidateSeconds: 0,
+    });
 }
 
 export function createProduttivoFormFill(payload: ProduttivoCreateFormFillPayload) {

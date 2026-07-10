@@ -47,11 +47,12 @@ function formatDate(value: string | null | undefined): string {
 
 type EditableField = {
   id?: number;
+  formFieldId?: number;
   name: string;
   value: string;
   fieldKind: string;
   mandatory: boolean;
-  options: string[];
+  options: Array<{ id?: number; value: string; label: string }>;
   hasMedia: boolean;
   mediaUrls: string[];
   mediaAttachmentIds: number[];
@@ -250,8 +251,9 @@ function normalizeFieldKey(name: string | null | undefined): string {
 }
 
 function toEditableFieldFromFill(field: ProduttivoFieldValue): EditableField | null {
-  const name = String(field.name ?? "").trim();
-  if (!name) return null;
+  const rawName = String(field.name ?? "");
+  const normalizedName = rawName.trim();
+  if (!normalizedName) return null;
 
   const mediaUrls = (field.attachments ?? [])
     .map((attachment) => getProduttivoAttachmentProxyUrl(attachment.file_url ?? null))
@@ -265,7 +267,8 @@ function toEditableFieldFromFill(field: ProduttivoFieldValue): EditableField | n
   if (Array.isArray(field.value)) {
     return {
       id: field.id,
-      name,
+      formFieldId: undefined,
+      name: rawName,
       value: field.value.join("\n"),
       fieldKind: "multi_select",
       mandatory: false,
@@ -278,7 +281,8 @@ function toEditableFieldFromFill(field: ProduttivoFieldValue): EditableField | n
 
   return {
     id: field.id,
-    name,
+    formFieldId: undefined,
+    name: rawName,
     value: String(field.value ?? ""),
     fieldKind: "text",
     mandatory: false,
@@ -292,10 +296,13 @@ function toEditableFieldFromFill(field: ProduttivoFieldValue): EditableField | n
 function toEditableFieldFromSchema(field: ProduttivoFormField, fillByName: Map<string, ProduttivoFieldValue>): EditableField | null {
   if (field.removed) return null;
 
-  const name = String(field.name ?? "").trim();
-  if (!name || name.toLowerCase().startsWith("removed-")) return null;
+  const rawName = String(field.name ?? "");
+  const normalizedName = rawName.trim();
+  if (!normalizedName || normalizedName.toLowerCase().startsWith("removed-")) return null;
 
-  const valueFromFill = fillByName.get(normalizeFieldKey(name));
+  const valueFromFill = fillByName.get(normalizeFieldKey(normalizedName));
+  const existingName = String(valueFromFill?.name ?? "");
+  const outputName = existingName.trim().length > 0 ? existingName : rawName;
   const mediaUrls = (valueFromFill?.attachments ?? [])
     .map((attachment) => getProduttivoAttachmentProxyUrl(attachment.file_url ?? null))
     .filter((url): url is string => Boolean(url));
@@ -309,12 +316,22 @@ function toEditableFieldFromSchema(field: ProduttivoFormField, fillByName: Map<s
     : String(valueFromFill?.value ?? "");
 
   const options = (field.field_options ?? [])
-    .map((option) => String(option.name ?? "").trim())
-    .filter((optionName) => optionName.length > 0);
+    .map((option) => {
+      const rawValue = String(option.name ?? "");
+      const label = rawValue.trim();
+      if (!label) return null;
+      return {
+        id: typeof option.id === "number" && option.id > 0 ? option.id : undefined,
+        value: rawValue,
+        label,
+      };
+    })
+    .filter(Boolean) as Array<{ id?: number; value: string; label: string }>;
 
   return {
     id: valueFromFill?.id,
-    name,
+    formFieldId: field.id,
+    name: outputName,
     value,
     fieldKind: String(field.field_type ?? "text").trim() || "text",
     mandatory: Boolean(field.mandatory),
@@ -330,6 +347,10 @@ function splitMultiValues(value: string): string[] {
     .split(/[\n,;]+/)
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+function normalizeSelectionValue(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 function isFieldEmpty(field: EditableField): boolean {
@@ -482,6 +503,8 @@ export default async function PreenchimentoAtividadePage(props: {
   (formFill.field_values ?? []).forEach((field) => {
     const key = normalizeFieldKey(field.name);
     if (!key) return;
+    // Preserve the first occurrence to avoid switching reference when API has duplicated names with tiny variations.
+    if (fillByName.has(key)) return;
     fillByName.set(key, field);
   });
 
@@ -562,21 +585,21 @@ export default async function PreenchimentoAtividadePage(props: {
 
       <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">Ordem de Servico - Manutenção V2</h1>
               <p className="mt-1 text-sm text-slate-500">Atividade #{work.id} | Form fill #{formFill.id}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:auto-cols-max sm:grid-flow-col sm:items-center">
               <Link
                 href={`/atividades/${work.id}?returnTo=${encodeURIComponent(returnTo)}`}
-                className="inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 sm:w-auto"
               >
                 Voltar para atividade
               </Link>
               <Link
                 href={returnTo}
-                className="inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 sm:w-auto"
               >
                 Voltar para lista
               </Link>
@@ -627,7 +650,7 @@ export default async function PreenchimentoAtividadePage(props: {
                   key={entry.section.id ?? sectionIndex}
                   className="rounded-xl border border-slate-200 bg-white"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
+                  <div className="flex flex-col items-start justify-between gap-2 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center">
                     <span className="text-sm font-semibold text-slate-900">{entry.section.name || `Secao ${sectionIndex + 1}`}</span>
                     <span className="text-xs text-slate-500">
                       {(() => {
@@ -642,6 +665,7 @@ export default async function PreenchimentoAtividadePage(props: {
                     {entry.fields.map((field) => {
                       const safeIndex = field.fieldIndex;
                       const multiSelected = splitMultiValues(field.value);
+                      const multiSelectedNormalized = new Set(multiSelected.map(normalizeSelectionValue));
                       const inputId = `field-input-${safeIndex}`;
                       const datetimeValue = toDateTimeLocalValue(field.value);
                       const canUseDateTimeInput = field.fieldKind === "datetime"
@@ -665,6 +689,7 @@ export default async function PreenchimentoAtividadePage(props: {
                               </summary>
                               <div className="mt-3 space-y-2">
                                 <input type="hidden" name={`field_id_${safeIndex}`} value={field.id ?? ""} />
+                                <input type="hidden" name={`schema_field_id_${safeIndex}`} value={field.formFieldId ?? ""} />
                                 <input type="hidden" name={`field_name_${safeIndex}`} value={field.name} />
                                 <input type="hidden" name={`field_kind_${safeIndex}`} value={field.fieldKind} />
 
@@ -677,24 +702,27 @@ export default async function PreenchimentoAtividadePage(props: {
                                   >
                                     <option value="">Selecione</option>
                                     {field.options.map((option) => (
-                                      <option key={option} value={option}>
-                                        {option}
+                                      <option key={`${option.value}-${safeIndex}`} value={option.value}>
+                                        {option.label}
                                       </option>
                                     ))}
                                   </select>
                                 ) : field.fieldKind === "multi_select" && field.options.length > 0 ? (
                                   <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
                                     {field.options.map((option) => (
-                                      <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
+                                      <label key={`${option.value}-${safeIndex}`} className="flex items-center gap-2 text-sm text-slate-700">
+                                        {option.id ? (
+                                          <input type="hidden" name={`field_option_name_${safeIndex}_${option.id}`} value={option.value} />
+                                        ) : null}
                                         <input
-                                          id={`${inputId}-${option}`}
+                                          id={`${inputId}-${option.value}`}
                                           type="checkbox"
                                           name={`field_value_${safeIndex}`}
-                                          value={option}
-                                          defaultChecked={multiSelected.includes(option)}
+                                          value={option.id ? String(option.id) : option.value}
+                                          defaultChecked={multiSelected.includes(option.value) || multiSelectedNormalized.has(normalizeSelectionValue(option.value))}
                                           className="h-4 w-4 rounded border-slate-300"
                                         />
-                                        {option}
+                                        {option.label}
                                       </label>
                                     ))}
                                   </div>
@@ -771,6 +799,7 @@ export default async function PreenchimentoAtividadePage(props: {
                                 ) : null}
                               </div>
                               <input type="hidden" name={`field_id_${safeIndex}`} value={field.id ?? ""} />
+                              <input type="hidden" name={`schema_field_id_${safeIndex}`} value={field.formFieldId ?? ""} />
                               <input type="hidden" name={`field_name_${safeIndex}`} value={field.name} />
                               <input type="hidden" name={`field_kind_${safeIndex}`} value={field.fieldKind} />
 
@@ -783,24 +812,27 @@ export default async function PreenchimentoAtividadePage(props: {
                                 >
                                   <option value="">Selecione</option>
                                   {field.options.map((option) => (
-                                    <option key={option} value={option}>
-                                      {option}
+                                    <option key={`${option.value}-${safeIndex}`} value={option.value}>
+                                      {option.label}
                                     </option>
                                   ))}
                                 </select>
                               ) : field.fieldKind === "multi_select" && field.options.length > 0 ? (
                                 <div className="space-y-2 rounded-xl border border-slate-200 bg-white p-3">
                                   {field.options.map((option) => (
-                                    <label key={option} className="flex items-center gap-2 text-sm text-slate-700">
+                                    <label key={`${option.value}-${safeIndex}`} className="flex items-center gap-2 text-sm text-slate-700">
+                                      {option.id ? (
+                                        <input type="hidden" name={`field_option_name_${safeIndex}_${option.id}`} value={option.value} />
+                                      ) : null}
                                       <input
-                                        id={`${inputId}-${option}`}
+                                        id={`${inputId}-${option.value}`}
                                         type="checkbox"
                                         name={`field_value_${safeIndex}`}
-                                        value={option}
-                                        defaultChecked={multiSelected.includes(option)}
+                                        value={option.id ? String(option.id) : option.value}
+                                        defaultChecked={multiSelected.includes(option.value) || multiSelectedNormalized.has(normalizeSelectionValue(option.value))}
                                         className="h-4 w-4 rounded border-slate-300"
                                       />
-                                      {option}
+                                      {option.label}
                                     </label>
                                   ))}
                                 </div>
@@ -877,6 +909,7 @@ export default async function PreenchimentoAtividadePage(props: {
                 <label key={`${field.name}-${index}`} className="block space-y-1">
                   <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{field.name}</span>
                   <input type="hidden" name={`field_id_${index}`} value={field.id ?? ""} />
+                  <input type="hidden" name={`schema_field_id_${index}`} value={field.formFieldId ?? ""} />
                   <input type="hidden" name={`field_name_${index}`} value={field.name} />
                   <input type="hidden" name={`field_kind_${index}`} value="text" />
                   <input
@@ -888,13 +921,13 @@ export default async function PreenchimentoAtividadePage(props: {
               ))
             )}
 
-            <div className="sticky bottom-3 z-10 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur">
+            <div className="sticky bottom-3 z-10 flex flex-col items-stretch justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 p-3 backdrop-blur sm:flex-row sm:items-center">
               <p className="text-xs text-slate-600">
                 Pendencias: <span className="font-semibold text-slate-800">{requiredFieldsPending}</span>
               </p>
               <button
                 type="submit"
-                className="inline-flex h-10 items-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
                 disabled={editableFields.length === 0}
               >
                 Salvar preenchimento

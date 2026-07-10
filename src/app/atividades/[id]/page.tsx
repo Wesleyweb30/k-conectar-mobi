@@ -90,25 +90,25 @@ export default async function AtividadeDetalhePage(props: {
 
       <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:px-8">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3 sm:items-center">
             <div>
               <h1 className="text-xl font-semibold tracking-tight text-slate-900">Atividade #{work.id}</h1>
               <p className="mt-1 text-sm text-slate-500">Detalhes da atividade criada no Produttivo.</p>
             </div>
-            <div className="flex items-center gap-2">
-              <form action={iniciarPreenchimentoAction}>
+            <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-none sm:auto-cols-max sm:grid-flow-col sm:items-center">
+              <form action={iniciarPreenchimentoAction} className="w-full sm:w-auto">
                 <input type="hidden" name="workId" value={work.id} />
                 <input type="hidden" name="returnTo" value={returnTo} />
                 <button
                   type="submit"
-                  className="inline-flex h-10 items-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                  className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto"
                 >
                   Preencher atividade
                 </button>
               </form>
               <Link
                 href={returnTo}
-                className="inline-flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-300 px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100 sm:w-auto"
               >
                 Voltar
               </Link>
@@ -172,12 +172,12 @@ export default async function AtividadeDetalhePage(props: {
               </div>
             ) : null}
 
-            <form action={iniciarPreenchimentoAction} className="mt-3">
+            <form action={iniciarPreenchimentoAction} className="mt-3 w-full sm:w-auto">
               <input type="hidden" name="workId" value={work.id} />
               <input type="hidden" name="returnTo" value={returnTo} />
               <button
                 type="submit"
-                className="inline-flex h-10 items-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className="inline-flex h-10 w-full items-center justify-center rounded-xl bg-emerald-600 px-4 text-sm font-semibold text-white transition hover:bg-emerald-700 sm:w-auto"
               >
                 {latestFormFill?.id ? "Editar preenchimento" : "Criar e preencher"}
               </button>

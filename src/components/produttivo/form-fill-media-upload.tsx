@@ -50,6 +50,8 @@ export default function FormFillMediaUpload({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const isUploadingRef = useRef(false);
+  const signatureAutoUploadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hiddenAttachmentIds = useMemo(() => {
     const existingIdsFromMedia = existingMedia
@@ -94,6 +96,7 @@ export default function FormFillMediaUpload({
     if (!list || list.length === 0) return;
 
     setIsUploading(true);
+    isUploadingRef.current = true;
     setError(null);
 
     const payload = new FormData();
@@ -132,6 +135,7 @@ export default function FormFillMediaUpload({
       setError(uploadError instanceof Error ? uploadError.message : "Nao foi possivel enviar o arquivo.");
     } finally {
       setIsUploading(false);
+      isUploadingRef.current = false;
     }
   }
 
@@ -150,6 +154,11 @@ export default function FormFillMediaUpload({
   }
 
   function onPointerDown(event: PointerEvent<HTMLCanvasElement>) {
+    if (signatureAutoUploadTimeoutRef.current) {
+      clearTimeout(signatureAutoUploadTimeoutRef.current);
+      signatureAutoUploadTimeoutRef.current = null;
+    }
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     const point = getCanvasPoint(event);
@@ -181,6 +190,29 @@ export default function FormFillMediaUpload({
 
   function onPointerUp() {
     setDrawing(false);
+
+    if (fieldKind !== "signature") return;
+
+    if (signatureAutoUploadTimeoutRef.current) {
+      clearTimeout(signatureAutoUploadTimeoutRef.current);
+    }
+
+    signatureAutoUploadTimeoutRef.current = setTimeout(() => {
+      if (!isUploadingRef.current) {
+        void uploadSignatureFromCanvas();
+      }
+    }, 900);
+  }
+
+  function canvasHasSignature(canvas: HTMLCanvasElement): boolean {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return false;
+
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    for (let index = 3; index < data.length; index += 4) {
+      if (data[index] !== 0) return true;
+    }
+    return false;
   }
 
   function clearSignature() {
@@ -195,7 +227,13 @@ export default function FormFillMediaUpload({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    if (!canvasHasSignature(canvas)) {
+      setError("Assine no campo antes de enviar.");
+      return;
+    }
+
     setIsUploading(true);
+    isUploadingRef.current = true;
     setError(null);
 
     const blob = await new Promise<Blob | null>((resolve) => {
@@ -244,6 +282,7 @@ export default function FormFillMediaUpload({
       setError(uploadError instanceof Error ? uploadError.message : "Nao foi possivel enviar assinatura.");
     } finally {
       setIsUploading(false);
+      isUploadingRef.current = false;
     }
   }
 
@@ -298,6 +337,7 @@ export default function FormFillMediaUpload({
       {fieldKind === "signature" ? (
         <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
           <p className="text-xs font-semibold text-slate-700">Assinatura manual</p>
+          <p className="text-xs text-slate-500">Ao terminar de assinar, o envio acontece automaticamente.</p>
           <canvas
             ref={canvasRef}
             width={560}
