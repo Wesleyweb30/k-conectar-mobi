@@ -17,7 +17,7 @@ interface UserTableProps {
 
 export default function UserTable({ users }: UserTableProps) {
   const [query, setQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "gestor" | "user">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "banned">("all");
   const [sortBy, setSortBy] = useState<"name-asc" | "name-desc" | "date-desc" | "date-asc">(
     "name-asc",
@@ -33,8 +33,12 @@ export default function UserTable({ users }: UserTableProps) {
         user.email.toLowerCase().includes(normalizedQuery);
 
       const isAdmin = user.role === "admin";
+      const isGestor = user.role === "gestor";
       const matchesRole =
-        roleFilter === "all" || (roleFilter === "admin" ? isAdmin : !isAdmin);
+        roleFilter === "all" ||
+        (roleFilter === "admin" && isAdmin) ||
+        (roleFilter === "gestor" && isGestor) ||
+        (roleFilter === "user" && !isAdmin && !isGestor);
 
       const isBanned = Boolean(user.banned);
       const matchesStatus =
@@ -74,7 +78,7 @@ export default function UserTable({ users }: UserTableProps) {
     const rows = filteredUsers.map((user) => [
       user.name,
       user.email,
-      user.role === "admin" ? "Admin" : "Usuário",
+      user.role === "admin" ? "Admin" : user.role === "gestor" ? "Gestor" : "Usuário",
       user.banned ? "Banido" : "Ativo",
       formatDate(user.createdAt),
     ]);
@@ -125,11 +129,14 @@ export default function UserTable({ users }: UserTableProps) {
 
           <select
             value={roleFilter}
-            onChange={(event) => setRoleFilter(event.target.value as "all" | "admin" | "user")}
+            onChange={(event) =>
+              setRoleFilter(event.target.value as "all" | "admin" | "gestor" | "user")
+            }
             className="h-9 rounded-lg border border-slate-300 px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
           >
             <option value="all">Perfil: todos</option>
             <option value="admin">Apenas admins</option>
+            <option value="gestor">Apenas gestores</option>
             <option value="user">Apenas usuários</option>
           </select>
 
@@ -189,10 +196,12 @@ export default function UserTable({ users }: UserTableProps) {
                     className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                       user.role === "admin"
                         ? "bg-purple-100 text-purple-700"
+                        : user.role === "gestor"
+                          ? "bg-sky-100 text-sky-700"
                         : "bg-gray-100 text-gray-600"
                     }`}
                   >
-                    {user.role === "admin" ? "Admin" : "Usuário"}
+                    {user.role === "admin" ? "Admin" : user.role === "gestor" ? "Gestor" : "Usuário"}
                   </span>
                 </td>
                 <td className="px-6 py-3">

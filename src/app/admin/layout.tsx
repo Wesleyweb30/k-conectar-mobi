@@ -14,13 +14,15 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  if (session.user.role !== "admin") {
+  const isPrivileged = session.user.role === "admin" || session.user.role === "gestor";
+
+  if (!isPrivileged) {
     redirect("/dashboard");
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <AdminNav userName={session.user.name} />
+      <AdminNav userName={session.user.name} userRole={session.user.role ?? undefined} />
       <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
     </div>
   );

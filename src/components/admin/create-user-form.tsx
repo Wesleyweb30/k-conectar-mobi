@@ -141,6 +141,7 @@ export default function CreateUserForm() {
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           >
             <option value="user">Usuário</option>
+            <option value="gestor">Gestor</option>
             <option value="admin">Admin</option>
           </select>
         </div>

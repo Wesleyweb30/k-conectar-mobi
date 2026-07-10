@@ -1,11 +1,16 @@
 import { headers } from "next/headers";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import UserTable from "@/components/admin/user-table";
 import CreateUserForm from "@/components/admin/create-user-form";
 
 export default async function DadosUsuariosPage() {
   const session = await auth.api.getSession({ headers: await headers() });
+
+  if (!session || session.user.role !== "admin") {
+    redirect("/admin");
+  }
 
   const usersResponse = await auth.api.listUsers({
     headers: await headers(),

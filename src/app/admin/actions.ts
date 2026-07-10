@@ -16,7 +16,10 @@ export async function createUserAction(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const roleRaw = formData.get("role") as string;
-  const role: "admin" | "user" = roleRaw === "admin" ? "admin" : "user";
+  const allowedRoles = new Set(["admin", "gestor", "user"]);
+  const role: "admin" | "gestor" | "user" = allowedRoles.has(roleRaw)
+    ? (roleRaw as "admin" | "gestor" | "user")
+    : "user";
 
   if (!name || !email || !password) {
     return { error: "Preencha todos os campos obrigatórios." };
